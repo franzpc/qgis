@@ -42,10 +42,8 @@ ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools f
 [Here you can include screenshots or animated GIFs showing the plugin in action]
 
 ## Support
-If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/ArcGeekCalculator/issues).
+If you encounter any issues or have any suggestions, please open an issue on our [issue tracker](https://github.com/franzpc/qgis/issues).
 
-## How to Contribute
-Contributions are welcome! Please read our [contribution guidelines](CONTRIBUTING.md) before submitting a pull request.
 
 ## License
 This project is licensed under the GNU General Public License v2.0 or later. See the [LICENSE](LICENSE) file for details.
