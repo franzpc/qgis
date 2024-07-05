@@ -133,6 +133,29 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
     def groupId(self):
         return 'arcgeek_calculator'
 
+    def shortHelpString(self):
+        return """
+        This algorithm calculates and adds coordinate information to a point layer in various formats.
+
+        Parameters:
+        - Input layer: The point layer to process.
+        - Modify the current layer: If checked, modifies the input layer. Otherwise, creates a new layer.
+        - Calculate XY (UTM): Adds X and Y fields with coordinates in the layer's CRS.
+        - Decimal Degrees: Adds latitude and longitude fields in decimal degrees.
+        - Degrees Minutes Seconds (DDD° MM' SSS.ss" <N|S|E|W>): Adds fields with coordinates in DMS format.
+        - Degrees Minutes Seconds (<N|S|E|W> DDD° MM' SSS.ss"): Adds fields with coordinates in alternative DMS format.
+
+        Outputs:
+        - A new point layer or the modified input layer with additional coordinate fields.
+
+        This tool is useful for:
+        - Converting between different coordinate formats.
+        - Adding coordinate information to existing point layers.
+        - Preparing data for different mapping or analysis requirements.
+
+        Note: Ensure that your input layer has a defined coordinate reference system (CRS) for accurate results.
+        """
+
     def createInstance(self):
         return CoordinateCalculatorAlgorithm()
 

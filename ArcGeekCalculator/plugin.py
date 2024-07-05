@@ -4,6 +4,8 @@ from PyQt5.QtWidgets import QAction
 from .scripts.processing_algorithm import CoordinateCalculatorAlgorithm
 from .scripts.calculate_line_algorithm import CalculateLineAlgorithm
 from .scripts.go_to_xy import GoToXYDialog
+from .scripts.from_polygon_to_points import PolygonToPointsAlgorithm
+from .scripts.basin_analysis_algorithm import BasinAnalysisAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -12,14 +14,20 @@ class ArcGeekCalculator:
         self.menu = '&ArcGeek Calculator'
         self.coordinate_algorithm = None
         self.line_algorithm = None
+        self.polygon_to_points_algorithm = None
+        self.basin_analysis_algorithm = None
         self.go_to_xy_dialog = None
 
     def initGui(self):
         self.coordinate_algorithm = CoordinateCalculatorAlgorithm()
         self.line_algorithm = CalculateLineAlgorithm()
+        self.polygon_to_points_algorithm = PolygonToPointsAlgorithm()
+        self.basin_analysis_algorithm = BasinAnalysisAlgorithm()
         
         self.add_action("Calculate Coordinates", self.run_coordinate_calculator)
         self.add_action("Calculate Line from Coordinates and Table", self.run_line_calculator)
+        self.add_action("Extract Ordered Points from Polygons", self.run_polygon_to_points)
+        self.add_action("Watershed Morphometric Analysis", self.run_basin_analysis)
         self.add_action("Go to XY", self.run_go_to_xy)
 
     def add_action(self, text, callback):
@@ -35,6 +43,14 @@ class ArcGeekCalculator:
     def run_line_calculator(self):
         from qgis import processing
         processing.execAlgorithmDialog(self.line_algorithm)
+
+    def run_polygon_to_points(self):
+        from qgis import processing
+        processing.execAlgorithmDialog(self.polygon_to_points_algorithm)
+
+    def run_basin_analysis(self):
+        from qgis import processing
+        processing.execAlgorithmDialog(self.basin_analysis_algorithm)
 
     def run_go_to_xy(self):
         if self.go_to_xy_dialog is None:
