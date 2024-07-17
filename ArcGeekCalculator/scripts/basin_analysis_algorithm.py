@@ -1,18 +1,18 @@
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtGui import QCursor
+from qgis.PyQt.QtWidgets import QApplication
 from qgis.core import (QgsProcessing, QgsFeatureSink, QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource, QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterRasterLayer, QgsProcessingParameterPoint,
                        QgsProcessingParameterCrs, QgsProcessingParameterField, QgsVectorLayer,
                        QgsRasterLayer, QgsFeature, QgsGeometry, QgsField, QgsProcessingUtils,
-                       QgsWkbTypes, QgsRasterBandStats, QgsPoint, QgsPointXY, QgsFields, QgsCoordinateReferenceSystem)
+                       QgsWkbTypes, QgsRasterBandStats, QgsPoint, QgsPointXY, QgsFields, 
+                       QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject,
+                       QgsProcessingParameterNumber)
+from qgis.gui import QgsMapToolEmitPoint, QgsMapCanvas
 import processing
 import math
-from .basin_processes import calculate_parameters, get_basin_area_interpretation, get_mean_slope_interpretation, \
-    get_form_factor_interpretation, get_elongation_ratio_interpretation, get_circularity_ratio_interpretation, \
-    get_drainage_density_interpretation, get_stream_frequency_interpretation, get_compactness_coefficient_interpretation, \
-    get_length_of_overland_flow_interpretation, get_constant_channel_maintenance_interpretation, get_ruggedness_number_interpretation, \
-    get_time_of_concentration_interpretation, get_bifurcation_ratio_interpretation, get_drainage_intensity_interpretation, \
-    get_relief_interpretation, get_drainage_texture_interpretation, get_infiltration_number_interpretation, get_fitness_ratio_interpretation
+from .basin_processes import calculate_parameters, get_basin_area_interpretation, get_mean_slope_interpretation
 
 class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     INPUT_BASIN = 'INPUT_BASIN'
@@ -21,6 +21,7 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
     POUR_POINT = 'POUR_POINT'
     STREAM_ORDER_FIELD = 'STREAM_ORDER_FIELD'
     OUTPUT_CRS = 'OUTPUT_CRS'
+    PRECISION = 'PRECISION'
     OUTPUT = 'OUTPUT'
 
     def initAlgorithm(self, config=None):
@@ -28,70 +29,61 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_STREAMS, 'Stream network', [QgsProcessing.TypeVectorLine]))
         self.addParameter(QgsProcessingParameterField(self.STREAM_ORDER_FIELD, 'Field containing stream order (Strahler)', optional=False, parentLayerParameterName=self.INPUT_STREAMS))
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Digital Elevation Model'))
-        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (outlet)'))
+        self.addParameter(QgsProcessingParameterPoint(self.POUR_POINT, 'Pour Point (outlet)', optional=False))
         self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=True))
+        self.addParameter(QgsProcessingParameterNumber(self.PRECISION, 'Decimal precision', type=QgsProcessingParameterNumber.Integer, minValue=0, maxValue=15, defaultValue=4))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 'Output Report', QgsProcessing.TypeVector))
 
     def processAlgorithm(self, parameters, context, feedback):
-        # Load input layers
         basin_layer = self.parameterAsVectorLayer(parameters, self.INPUT_BASIN, context)
         streams_layer = self.parameterAsVectorLayer(parameters, self.INPUT_STREAMS, context)
         dem_layer = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         pour_point = self.parameterAsPoint(parameters, self.POUR_POINT, context, basin_layer.crs())
         stream_order_field = self.parameterAsString(parameters, self.STREAM_ORDER_FIELD, context)
         output_crs = self.parameterAsCrs(parameters, self.OUTPUT_CRS, context)
+        precision = self.parameterAsInt(parameters, self.PRECISION, context)
 
-        if not basin_layer.isValid():
-            feedback.reportError('Invalid basin layer')
-            return {}
-        if not streams_layer.isValid():
-            feedback.reportError('Invalid streams layer')
-            return {}
-        if not dem_layer.isValid():
-            feedback.reportError('Invalid DEM layer')
+        if not basin_layer.isValid() or not streams_layer.isValid() or not dem_layer.isValid():
+            feedback.reportError('One or more input layers are invalid')
             return {}
 
-        # Ensure all layers have the same CRS
         if basin_layer.crs() != streams_layer.crs() or basin_layer.crs() != dem_layer.crs():
             feedback.reportError('Input layers have different Coordinate Reference Systems (CRS). Please ensure all layers have the same CRS.')
             return {}
 
-        # Reproject layers if output CRS is specified
-        if output_crs.isValid() and output_crs != basin_layer.crs():
-            basin_layer = self.reproject_layer(basin_layer, output_crs, context, feedback)
-            streams_layer = self.reproject_layer(streams_layer, output_crs, context, feedback)
-            dem_layer = self.reproject_raster(dem_layer, output_crs, context, feedback)
+        calculation_crs = basin_layer.crs()
 
-        # Clip DEM by basin mask
         dem_clipped = self.clip_dem_by_basin(dem_layer, basin_layer, context, feedback)
-
-        # Calculate slope
         slope_layer = self.calculate_slope(dem_clipped, context, feedback)
-
-        # Get slope statistics
         slope_stats = self.get_slope_statistics(slope_layer, context, feedback)
+        
         mean_slope_degrees = slope_stats['MEAN']
         mean_slope_percent = math.tan(math.radians(mean_slope_degrees)) * 100
 
-        # Calculate morphometric parameters
         results = calculate_parameters(basin_layer, streams_layer, dem_clipped, pour_point, stream_order_field, mean_slope_degrees, feedback)
         results["Mean Slope (degrees)"] = {"value": mean_slope_degrees, "unit": "degrees", "interpretation": get_mean_slope_interpretation(mean_slope_degrees)}
         results["Mean Slope (percent)"] = {"value": mean_slope_percent, "unit": "%", "interpretation": get_mean_slope_interpretation(mean_slope_percent, percent=True)}
 
-        # Create output layer and add calculated parameters
         fields = QgsFields()
         fields.append(QgsField("Parameter", QVariant.String))
         fields.append(QgsField("Value", QVariant.Double))
         fields.append(QgsField("Unit", QVariant.String))
         fields.append(QgsField("Interpretation", QVariant.String))
-        sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, output_crs if output_crs.isValid() else basin_layer.crs())
+
+        sink_crs = output_crs if output_crs.isValid() else calculation_crs
+        sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, sink_crs)
+
+        transform = QgsCoordinateTransform(calculation_crs, sink_crs, QgsProject.instance()) if sink_crs != calculation_crs else None
 
         for param, details in results.items():
             feature = QgsFeature()
             feature.setFields(fields)
-            feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
+            
+            point = transform.transform(pour_point) if transform else pour_point
+            feature.setGeometry(QgsGeometry.fromPointXY(point))
+            
             feature.setAttribute("Parameter", param)
-            feature.setAttribute("Value", round(details['value'], 5))
+            feature.setAttribute("Value", round(details['value'], precision))
             feature.setAttribute("Unit", details['unit'])
             feature.setAttribute("Interpretation", details['interpretation'])
             sink.addFeature(feature, QgsFeatureSink.FastInsert)
@@ -129,24 +121,34 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
         }
         return processing.run("qgis:rasterlayerstatistics", params, context=context, feedback=feedback)
 
-    def reproject_layer(self, layer, crs, context, feedback):
-        params = {
-            'INPUT': layer,
-            'TARGET_CRS': crs,
-            'OUTPUT': 'memory:'
-        }
-        result = processing.run("native:reprojectlayer", params, context=context, feedback=feedback)
-        return QgsVectorLayer(result['OUTPUT'], layer.name(), 'memory')
+    def createCustomParametersWidgets(self, wrapper):
+        from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
+        from qgis.PyQt.QtCore import Qt
 
-    def reproject_raster(self, raster_layer, crs, context, feedback):
-        params = {
-            'INPUT': raster_layer,
-            'TARGET_CRS': crs,
-            'RESAMPLING': 0,
-            'OUTPUT': 'memory:'
-        }
-        result = processing.run("gdal:warpreproject", params, context=context, feedback=feedback)
-        return QgsRasterLayer(result['OUTPUT'], raster_layer.name())
+        def canvasClicked(point, button):
+            wrapper.setParameterValue(self.POUR_POINT, point)
+            canvas.unsetMapTool(mapTool)
+            QApplication.restoreOverrideCursor()
+            rubberBand.reset()
+
+        canvas = wrapper.dialog().findChild(QgsMapCanvas)
+        mapTool = QgsMapToolEmitPoint(canvas)
+        mapTool.canvasClicked.connect(canvasClicked)
+        
+        rubberBand = QgsRubberBand(canvas, QgsWkbTypes.PointGeometry)
+        rubberBand.setColor(Qt.red)
+        rubberBand.setWidth(3)
+        
+        def canvasMoveEvent(e):
+            rubberBand.reset()
+            rubberBand.addPoint(e.mapPoint())
+
+        mapTool.canvasMoveEvent = canvasMoveEvent
+        
+        canvas.setMapTool(mapTool)
+        QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
+
+        return []
 
     def name(self):
         return 'basinanalysis'
@@ -172,9 +174,12 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             Digital Elevation Model: A raster layer representing the terrain elevation
             Pour Point: A point representing the basin outlet
             Output CRS: Optional. The coordinate reference system for the output
+            Decimal precision: Number of decimal places for the results (default: 4)
 
         Outputs:
             A table with calculated morphometric parameters and their interpretations
+
+        Note: All input layers must have the same Coordinate Reference System (CRS).
         """
 
     def createInstance(self):

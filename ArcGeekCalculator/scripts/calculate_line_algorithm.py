@@ -4,7 +4,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterNumber,
                        QgsFeature, QgsGeometry, QgsPointXY, QgsField, QgsProject,
                        QgsWkbTypes, QgsFeatureSink, QgsProcessingParameterCrs,
                        QgsFields, QgsProcessingMultiStepFeedback, QgsCoordinateReferenceSystem,
-                       QgsProcessing)
+                       QgsProcessing, QgsProcessingException)
 from qgis.PyQt.QtCore import QVariant
 import numpy as np
 
@@ -41,32 +41,36 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         field_observations = self.parameterAsString(parameters, self.FIELD_OBSERVATIONS, context)
         output_crs = self.parameterAsCrs(parameters, self.OUTPUT_CRS, context)
 
-        # Preparar campos para la capa de líneas
+        # Prepare fields for the line layer
         line_fields = QgsFields()
         line_fields.append(QgsField('length', QVariant.Double))
 
-        # Preparar campos para la capa de puntos
+        # Prepare fields for the point layer
         point_fields = QgsFields()
         point_fields.append(QgsField('ID', QVariant.Int))
-        point_fields.append(QgsField('Distancia', QVariant.Double))
-        point_fields.append(QgsField('Angulo', QVariant.Double))
+        point_fields.append(QgsField('Distance', QVariant.Double))
+        point_fields.append(QgsField('Angle', QVariant.Double))
         point_fields.append(QgsField('X', QVariant.Double))
         point_fields.append(QgsField('Y', QVariant.Double))
         if field_observations:
-            point_fields.append(QgsField('Observaciones', QVariant.String))
+            point_fields.append(QgsField('Observations', QVariant.String))
         
+        # Create sinks for output layers
         (line_sink, line_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_LINE, context,
                                                          line_fields, QgsWkbTypes.LineString, output_crs)
         (point_sink, point_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_POINTS, context,
                                                            point_fields, QgsWkbTypes.Point, output_crs)
 
+        if line_sink is None or point_sink is None:
+            raise QgsProcessingException(self.tr('Could not create output layers'))
+
         points = [QgsPointXY(x_start, y_start)]
-        x_anterior, y_anterior = x_start, y_start
+        x_previous, y_previous = x_start, y_start
         
-        # Crear punto inicial
+        # Create initial point
         initial_point = QgsFeature(point_fields)
         initial_point.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x_start, y_start)))
-        initial_attributes = [0, 0, 0, x_start, y_start]
+        initial_attributes = [0, 0.0, 0.0, float(x_start), float(y_start)]
         if field_observations:
             initial_attributes.append('')
         initial_point.setAttributes(initial_attributes)
@@ -80,35 +84,42 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                 break
 
             try:
-                distancia = float(feature[field_distance])
-                angulo_grados = float(feature[field_angle])
-                angulo_radianes = np.radians(angulo_grados)
-                x_actual = x_anterior + distancia * np.sin(angulo_radianes)
-                y_actual = y_anterior + distancia * np.cos(angulo_radianes)
-                new_point = QgsPointXY(x_actual, y_actual)
+                distance = float(feature[field_distance] or 0)
+                angle_degrees = float(feature[field_angle] or 0)
+                angle_radians = np.radians(angle_degrees)
+                x_current = x_previous + distance * np.sin(angle_radians)
+                y_current = y_previous + distance * np.cos(angle_radians)
+                new_point = QgsPointXY(x_current, y_current)
                 points.append(new_point)
                 
-                # Crear punto
+                # Create point feature
                 point_feature = QgsFeature(point_fields)
                 point_feature.setGeometry(QgsGeometry.fromPointXY(new_point))
-                point_attributes = [current + 1, distancia, angulo_grados, x_actual, y_actual]
+                point_attributes = [
+                    current + 1,
+                    float(distance),
+                    float(angle_degrees),
+                    float(x_current),
+                    float(y_current)
+                ]
                 if field_observations:
-                    point_attributes.append(feature[field_observations])
+                    obs_value = str(feature[field_observations] or '')
+                    point_attributes.append(obs_value)
                 point_feature.setAttributes(point_attributes)
                 point_sink.addFeature(point_feature, QgsFeatureSink.FastInsert)
                 
-                # Crear segmento de línea
+                # Create line segment
                 line_feature = QgsFeature(line_fields)
-                line_geom = QgsGeometry.fromPolylineXY([QgsPointXY(x_anterior, y_anterior), new_point])
+                line_geom = QgsGeometry.fromPolylineXY([QgsPointXY(x_previous, y_previous), new_point])
                 length = line_geom.length()
                 line_feature.setGeometry(line_geom)
-                line_feature.setAttributes([length])
+                line_feature.setAttributes([float(length)])
                 line_sink.addFeature(line_feature, QgsFeatureSink.FastInsert)
                 
-                x_anterior, y_anterior = x_actual, y_actual
+                x_previous, y_previous = x_current, y_current
                 
-            except ValueError as e:
-                feedback.reportError(f"Error en la fila {current + 1}: {str(e)}")
+            except (ValueError, TypeError) as e:
+                feedback.reportError(f"Error in row {current + 1}: {str(e)}")
                 continue
 
             feedback.setProgress(int(current * total))
