@@ -2,22 +2,22 @@
 name=ArcGeek Calculator
 qgisMinimumVersion=3.0
 description=A comprehensive toolset for coordinate calculations, conversions, and spatial operations in QGIS.
-version=1.3beta
+version=1.4beta
 author=ArcGeek
 email=soporte@arcgeek.com
 about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, and anyone working with spatial data:
     1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
     2. Calculate Line from Coordinates and Table: Generate line features from tabular data (CSV, TXT, or vector layers) containing distances and angles.
     3. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
-    4. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons.
+    4. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
     5. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
 tracker=https://github.com/franzpc/qgis/issues
 repository=https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
 homepage=https://arcgeek.com/
+donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
 tags=coordinates, calculator, analysis, conversion, dms, decimal degrees, line generation, xy navigation, csv import, polygon extraction, watershed analysis
 category=Analysis
 icon=icon.png
 experimental=False
 deprecated=False
-

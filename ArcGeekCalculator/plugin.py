@@ -1,60 +1,99 @@
-from qgis.core import QgsApplication, QgsPointXY, QgsGeometry, QgsFeature, QgsVectorLayer, QgsProject, QgsCoordinateTransform
+import os
+from qgis.core import QgsApplication, QgsMapLayer, QgsWkbTypes, Qgis
 from qgis.gui import QgisInterface
-from PyQt5.QtWidgets import QAction
-from .scripts.processing_algorithm import CoordinateCalculatorAlgorithm
-from .scripts.calculate_line_algorithm import CalculateLineAlgorithm
+from PyQt5.QtWidgets import QAction, QMenu
+from PyQt5.QtGui import QIcon
+from .scripts.coordinate_algorithm import CoordinateCalculatorAlgorithm
+from .scripts.calculate_line_geometry import CalculateLineGeometryAlgorithm
+from .scripts.calculate_polygon_geometry import CalculatePolygonGeometryAlgorithm
 from .scripts.go_to_xy import GoToXYDialog
 from .scripts.from_polygon_to_points import PolygonToPointsAlgorithm
 from .scripts.basin_analysis_algorithm import BasinAnalysisAlgorithm
+from .scripts.watershed_stream import WatershedAnalysisAlgorithm
+from .scripts.lines_to_ordered_points import LinesToOrderedPointsAlgorithm
+from .scripts.watershed_basin import WatershedBasinDelineationAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
         self.iface = iface
         self.actions = []
         self.menu = '&ArcGeek Calculator'
-        self.coordinate_algorithm = None
-        self.line_algorithm = None
-        self.polygon_to_points_algorithm = None
-        self.basin_analysis_algorithm = None
+        self.algorithms = {}
         self.go_to_xy_dialog = None
+        self.plugin_dir = os.path.dirname(__file__)
+        self.context_menu_actions = []
+        self.map_tool = None
 
     def initGui(self):
-        self.coordinate_algorithm = CoordinateCalculatorAlgorithm()
-        self.line_algorithm = CalculateLineAlgorithm()
-        self.polygon_to_points_algorithm = PolygonToPointsAlgorithm()
-        self.basin_analysis_algorithm = BasinAnalysisAlgorithm()
+        self.algorithms = {
+            'coordinate': CoordinateCalculatorAlgorithm(),
+            'line': CalculateLineGeometryAlgorithm(),
+            'polygon': CalculatePolygonGeometryAlgorithm(),
+            'polygon_to_points': PolygonToPointsAlgorithm(),
+            'basin_analysis': BasinAnalysisAlgorithm(),
+            'watershed_stream': WatershedAnalysisAlgorithm(),
+            'lines_to_ordered_points': LinesToOrderedPointsAlgorithm(),
+            'watershed_basin': WatershedBasinDelineationAlgorithm()
+        }
         
-        self.add_action("Calculate Coordinates", self.run_coordinate_calculator)
-        self.add_action("Calculate Line from Coordinates and Table", self.run_line_calculator)
-        self.add_action("Extract Ordered Points from Polygons", self.run_polygon_to_points)
-        self.add_action("Watershed Morphometric Analysis", self.run_basin_analysis)
-        self.add_action("Go to XY", self.run_go_to_xy)
+        self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
+        self.add_action("Calculate Line Geometry", self.run_algorithm('line'), os.path.join(self.plugin_dir, "icons/calculate_length.png"))
+        self.add_action("Calculate Polygon Geometry", self.run_algorithm('polygon'), os.path.join(self.plugin_dir, "icons/calculate_area.png"))
+        self.add_action("Extract Ordered Points from Polygons", self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
+        self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
+        self.add_separator()
+        self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
+        self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
+        self.add_action("Watershed Morphometric Analysis", self.run_algorithm('basin_analysis'), os.path.join(self.plugin_dir, "icons/watershed_morfo.png"))
+        self.add_separator()
+        self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
-    def add_action(self, text, callback):
-        action = QAction(text, self.iface.mainWindow())
+        # QGIS version
+        version = Qgis.QGIS_VERSION_INT
+
+        # Disconnect previous connections before reconnecting
+        try:
+            self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
+        except:
+            pass
+
+        # For QGIS 3.0 and later versions
+        if version >= 30000:
+            self.iface.layerTreeView().contextMenuAboutToShow.connect(self.add_layer_menu_items)
+        # For earlier versions of QGIS (if necessary)
+        else:
+            self.iface.layerTreeView().layerTreeContextMenuAboutToShow.connect(self.add_layer_menu_items)
+
+        # Connect to the map canvas context menu
+        self.iface.mapCanvas().contextMenuAboutToShow.connect(self.add_map_menu_items)
+
+    def add_action(self, text, callback, icon_path=None):
+        if icon_path and os.path.exists(icon_path):
+            print(f"Icon path found: {icon_path}")
+            action = QAction(QIcon(icon_path), text, self.iface.mainWindow())
+        else:
+            if icon_path:
+                print(f"Icon path not found: {icon_path}")
+            action = QAction(text, self.iface.mainWindow())
         action.triggered.connect(callback)
         self.iface.addPluginToMenu(self.menu, action)
         self.actions.append(action)
 
-    def run_coordinate_calculator(self):
-        from qgis import processing
-        processing.execAlgorithmDialog(self.coordinate_algorithm)
+    def add_separator(self):
+        separator = QAction(self.iface.mainWindow())
+        separator.setSeparator(True)
+        self.iface.addPluginToMenu(self.menu, separator)
+        self.actions.append(separator)
 
-    def run_line_calculator(self):
-        from qgis import processing
-        processing.execAlgorithmDialog(self.line_algorithm)
-
-    def run_polygon_to_points(self):
-        from qgis import processing
-        processing.execAlgorithmDialog(self.polygon_to_points_algorithm)
-
-    def run_basin_analysis(self):
-        from qgis import processing
-        processing.execAlgorithmDialog(self.basin_analysis_algorithm)
+    def run_algorithm(self, algorithm_name):
+        def callback():
+            from qgis import processing
+            processing.execAlgorithmDialog(self.algorithms[algorithm_name])
+        return callback
 
     def run_go_to_xy(self):
         if self.go_to_xy_dialog is None:
-            self.go_to_xy_dialog = GoToXYDialog(self, self.iface.mainWindow())
+            self.go_to_xy_dialog = GoToXYDialog(self.iface, self.iface.mainWindow())
         self.go_to_xy_dialog.show()
 
     def unload(self):
@@ -64,33 +103,58 @@ class ArcGeekCalculator:
             self.go_to_xy_dialog.close()
             self.go_to_xy_dialog = None
 
-    def go_to_xy(self, x, y, coord_type, source_crs, create_point):
-        canvas = self.iface.mapCanvas()
-        dest_crs = canvas.mapSettings().destinationCrs()
-        
-        point = QgsPointXY(x, y)
-        
+        # Disconnect the layer tree context menu signal
         try:
-            if source_crs != dest_crs:
-                transform = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
-                point = transform.transform(point)
-            
-            canvas.setCenter(point)
-            canvas.zoomScale(5000)  # You can adjust this zoom level
-            canvas.refresh()
-            
-            if create_point:
-                self.create_point_marker(point, dest_crs)
-        except Exception as e:
-            self.iface.messageBar().pushMessage("Error", f"Failed to transform coordinates: {str(e)}", level=1, duration=5)
+            self.iface.layerTreeView().contextMenuAboutToShow.disconnect(self.add_layer_menu_items)
+        except:
+            pass
 
-    def create_point_marker(self, point, crs):
-        vl = QgsVectorLayer("Point?crs={}".format(crs.authid()), "Go to XY Point", "memory")
-        pr = vl.dataProvider()
-        
-        fet = QgsFeature()
-        fet.setGeometry(QgsGeometry.fromPointXY(point))
-        pr.addFeature(fet)
-        
-        vl.updateExtents()
-        QgsProject.instance().addMapLayer(vl)
+        # Disconnect the map canvas context menu signal
+        try:
+            self.iface.mapCanvas().contextMenuAboutToShow.disconnect(self.add_map_menu_items)
+        except:
+            pass
+
+    def add_layer_menu_items(self, menu):
+        # Safely clear previous actions
+        for action in self.context_menu_actions[:]:  # Iterate over a copy of the list
+            try:
+                if action in menu.actions():  # Check if the action is still in the menu
+                    menu.removeAction(action)
+                self.context_menu_actions.remove(action)
+            except RuntimeError:
+                # The action no longer exists, simply remove it from our list
+                self.context_menu_actions.remove(action)
+            except Exception as e:
+                # Log any other unexpected errors
+                print(f"Error removing action: {str(e)}")
+
+        layer = self.iface.layerTreeView().currentLayer()
+        if layer and layer.type() == QgsMapLayer.VectorLayer:
+            geometry_type = layer.geometryType()
+
+            if geometry_type == QgsWkbTypes.PointGeometry:
+                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), "Calculate XY Coordinates", menu)
+                action.triggered.connect(lambda: self.run_algorithm('coordinate')())
+                menu.insertAction(menu.actions()[-14], action)
+                self.context_menu_actions.append(action)
+            elif geometry_type == QgsWkbTypes.LineGeometry:
+                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), "Calculate Length", menu)
+                action.triggered.connect(lambda: self.run_algorithm('line')())
+                menu.insertAction(menu.actions()[-14], action)
+                self.context_menu_actions.append(action)
+                
+                action_lines_to_points = QAction(QIcon(os.path.join(self.plugin_dir, "icons/lines_to_points.png")), "Lines to Ordered Points", menu)
+                action_lines_to_points.triggered.connect(lambda: self.run_algorithm('lines_to_ordered_points')())
+                menu.insertAction(menu.actions()[-14], action_lines_to_points)
+                self.context_menu_actions.append(action_lines_to_points)
+            elif geometry_type == QgsWkbTypes.PolygonGeometry:
+                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
+                action.triggered.connect(lambda: self.run_algorithm('polygon')())
+                menu.insertAction(menu.actions()[-14], action)
+                self.context_menu_actions.append(action)
+
+    def add_map_menu_items(self, menu):
+        action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/gotoXY.png")), "Go to XY", menu)
+        action.triggered.connect(self.run_go_to_xy)
+        menu.addAction(action)
