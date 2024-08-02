@@ -3,9 +3,11 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFeatureSour
                        QgsProcessing, QgsProcessingException, QgsField, edit, QgsVectorLayer, 
                        QgsFeatureRequest, QgsVectorFileWriter, QgsCoordinateReferenceSystem,
                        QgsCoordinateTransform, QgsProject, QgsProcessingProvider,
-                       QgsProcessingParameterNumber, QgsProcessingParameterCrs)
-from qgis.PyQt.QtCore import QVariant
+                       QgsProcessingParameterNumber, QgsProcessingParameterCrs, QgsCsException,
+                       QgsWkbTypes)
+from qgis.PyQt.QtCore import QVariant, QCoreApplication
 import traceback
+import os
 
 class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -18,11 +20,49 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
     PRECISION = 'PRECISION'
     CRS = 'CRS'
 
+    def __init__(self):
+        super().__init__()
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return CoordinateCalculatorAlgorithm()
+
+    def name(self):
+        return 'coordinate_calculator'
+
+    def displayName(self):
+        return self.tr('Calculate Coordinates')
+
+    def group(self):
+        return self.tr('ArcGeek Calculator')
+
+    def groupId(self):
+        return 'arcgeek_calculator'
+
+    def shortHelpString(self):
+        return self.tr("""
+        This algorithm calculates and adds coordinate information to a point layer in various formats.
+
+        Parameters:
+        - Input layer: The point layer to process.
+        - Modify the current layer: If checked, modifies the input layer. Otherwise, creates a new layer.
+        - Calculate XY: Adds X and Y fields with coordinates in the specified CRS.
+        - Decimal Degrees: Adds latitude and longitude fields in decimal degrees.
+        - Degrees Minutes Seconds (DDD° MM' SSS.ss" <N|S|E|W>): Adds fields with coordinates in DMS format.
+        - Degrees Minutes Seconds (<N|S|E|W> DDD° MM' SSS.ss"): Adds fields with coordinates in alternative DMS format.
+        - Precision: Set the number of decimal places for results.
+        - CRS for calculations: Specify a CRS for the calculations. If not specified, the layer's CRS will be used.
+
+        Note: Ensure that your input layer has a defined coordinate reference system (CRS) for accurate results.
+        """)
+
     def initAlgorithm(self, config=None):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
-                'Input layer',
+                self.tr('Input layer'),
                 [QgsProcessing.TypeVectorPoint]
             )
         )
@@ -30,7 +70,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.MODIFY,
-                'Modify the current layer',
+                self.tr('Modify the current layer'),
                 defaultValue=False
             )
         )
@@ -38,7 +78,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterVectorDestination(
                 self.OUTPUT,
-                'Output layer',
+                self.tr('Output layer'),
                 optional=True
             )
         )
@@ -46,7 +86,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.CALCULATE_XY,
-                'Calculate XY',
+                self.tr('Calculate XY'),
                 defaultValue=True
             )
         )
@@ -54,7 +94,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.FORMAT_DD,
-                'Decimal Degrees',
+                self.tr('Decimal Degrees'),
                 defaultValue=False
             )
         )
@@ -62,7 +102,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.FORMAT_DMS,
-                'Degrees Minutes Seconds (DDD° MM\' SSS.ss" <N|S|E|W>)',
+                self.tr('Degrees Minutes Seconds (DDD° MM\' SSS.ss" <N|S|E|W>)'),
                 defaultValue=False
             )
         )
@@ -70,7 +110,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 self.FORMAT_DMS2,
-                'Degrees Minutes Seconds (<N|S|E|W> DDD° MM\' SSS.ss")',
+                self.tr('Degrees Minutes Seconds (<N|S|E|W> DDD° MM\' SSS.ss")'),
                 defaultValue=False
             )
         )
@@ -78,7 +118,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PRECISION,
-                'Precision',
+                self.tr('Precision'),
                 type=QgsProcessingParameterNumber.Integer,
                 minValue=0,
                 maxValue=15,
@@ -89,7 +129,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterCrs(
                 self.CRS,
-                'CRS for calculations',
+                self.tr('CRS for calculations'),
                 optional=True
             )
         )
@@ -98,7 +138,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
         try:
             source = self.parameterAsSource(parameters, self.INPUT, context)
             if not source:
-                raise QgsProcessingException("Input layer could not be loaded")
+                raise QgsProcessingException(self.tr("Input layer could not be loaded"))
 
             modify_layer = self.parameterAsBool(parameters, self.MODIFY, context)
             calculate_xy = self.parameterAsBool(parameters, self.CALCULATE_XY, context)
@@ -124,103 +164,112 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                 target_layer.commitChanges()
 
             if not target_layer.fields():
-                raise QgsProcessingException("The layer has no fields.")
+                raise QgsProcessingException(self.tr("The layer has no fields."))
 
-            # Add new fields
+            # Add new fields or update existing ones
             with edit(target_layer):
-                if calculate_xy and (target_layer.fields().lookupField('X') == -1 or target_layer.fields().lookupField('Y') == -1):
-                    target_layer.addAttribute(QgsField('X', QVariant.Double, prec=precision))
-                    target_layer.addAttribute(QgsField('Y', QVariant.Double, prec=precision))
-                if format_dd and (target_layer.fields().lookupField('DD_Lat') == -1 or target_layer.fields().lookupField('DD_Lon') == -1):
-                    target_layer.addAttribute(QgsField('DD_Lat', QVariant.Double, prec=precision))
-                    target_layer.addAttribute(QgsField('DD_Lon', QVariant.Double, prec=precision))
-                if format_dms and (target_layer.fields().lookupField('DMS_Lat') == -1 or target_layer.fields().lookupField('DMS_Lon') == -1):
-                    target_layer.addAttribute(QgsField('DMS_Lat', QVariant.String))
-                    target_layer.addAttribute(QgsField('DMS_Lon', QVariant.String))
-                if format_dms2 and (target_layer.fields().lookupField('Lat_DMS') == -1 or target_layer.fields().lookupField('Lon_DMS') == -1):
-                    target_layer.addAttribute(QgsField('Lat_DMS', QVariant.String))
-                    target_layer.addAttribute(QgsField('Lon_DMS', QVariant.String))
+                fields_to_add = []
+                if calculate_xy:
+                    fields_to_add.extend([
+                        QgsField('X', QVariant.Double, len=20, prec=precision),
+                        QgsField('Y', QVariant.Double, len=20, prec=precision)
+                    ])
+                if format_dd:
+                    fields_to_add.extend([
+                        QgsField('DD_Lat', QVariant.Double, len=20, prec=precision),
+                        QgsField('DD_Lon', QVariant.Double, len=20, prec=precision)
+                    ])
+                if format_dms:
+                    fields_to_add.extend([
+                        QgsField('DMS_Lat', QVariant.String, len=20),
+                        QgsField('DMS_Lon', QVariant.String, len=20)
+                    ])
+                if format_dms2:
+                    fields_to_add.extend([
+                        QgsField('Lat_DMS', QVariant.String, len=20),
+                        QgsField('Lon_DMS', QVariant.String, len=20)
+                    ])
+
+                for field in fields_to_add:
+                    if target_layer.fields().lookupField(field.name()) == -1:
+                        target_layer.addAttribute(field)
+                    else:
+                        idx = target_layer.fields().lookupField(field.name())
+                        target_layer.deleteAttribute(idx)
+                        target_layer.addAttribute(field)
+
+            target_layer.updateFields()
 
             calculate_coordinates(target_layer, calculate_xy, format_dd, format_dms, format_dms2, precision, crs, feedback)
 
             if not modify_layer:
                 output_file = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
-                result = QgsVectorFileWriter.writeAsVectorFormat(target_layer, output_file, "utf-8", target_layer.crs(), "GPKG")
-                if result[0] != QgsVectorFileWriter.NoError:
-                    raise QgsProcessingException(f"Error writing output: {result[1]}")
+                output_format = QgsVectorFileWriter.driverForExtension(os.path.splitext(output_file)[1])
+                
+                if output_format == "ESRI Shapefile":
+                    # Truncate field names to 10 characters for Shapefile compatibility
+                    with edit(target_layer):
+                        for idx, field in enumerate(target_layer.fields()):
+                            if len(field.name()) > 10:
+                                new_name = field.name()[:10]
+                                target_layer.renameAttribute(idx, new_name)
+                
+                save_options = QgsVectorFileWriter.SaveVectorOptions()
+                save_options.driverName = output_format
+                save_options.fileEncoding = "UTF-8"
+                
+                transform_context = QgsProject.instance().transformContext()
+                error = QgsVectorFileWriter.writeAsVectorFormatV3(target_layer, 
+                                                                  output_file,
+                                                                  transform_context,
+                                                                  save_options)
+                
+                if error[0] != QgsVectorFileWriter.NoError:
+                    raise QgsProcessingException(self.tr(f"Error writing output: {error[1]}"))
+                
                 return {self.OUTPUT: output_file}
 
             return {self.OUTPUT: target_layer.id()}
 
         except Exception as e:
-            feedback.reportError(f"Error in processAlgorithm: {str(e)}", fatalError=True)
+            feedback.reportError(self.tr(f"Error in processAlgorithm: {str(e)}"), fatalError=True)
             feedback.pushInfo(traceback.format_exc())
             raise
 
-    def name(self):
-        return 'coordinate_calculator'
-
-    def displayName(self):
-        return 'Calculate Coordinates'
-
-    def group(self):
-        return 'ArcGeek Calculator'
-
-    def groupId(self):
-        return 'arcgeek_calculator'
-
-    def shortHelpString(self):
-        return """
-        This algorithm calculates and adds coordinate information to a point layer in various formats.
-
-        Parameters:
-        - Input layer: The point layer to process.
-        - Modify the current layer: If checked, modifies the input layer. Otherwise, creates a new layer.
-        - Calculate XY: Adds X and Y fields with coordinates in the specified CRS.
-        - Decimal Degrees: Adds latitude and longitude fields in decimal degrees.
-        - Degrees Minutes Seconds (DDD° MM' SSS.ss" <N|S|E|W>): Adds fields with coordinates in DMS format.
-        - Degrees Minutes Seconds (<N|S|E|W> DDD° MM' SSS.ss"): Adds fields with coordinates in alternative DMS format.
-        - Precision: Set the number of decimal places for results.
-        - CRS for calculations: Specify a CRS for the calculations. If not specified, the layer's CRS will be used.
-
-        Note: Ensure that your input layer has a defined coordinate reference system (CRS) for accurate results.
-        """
-
-    def createInstance(self):
-        return CoordinateCalculatorAlgorithm()
-
-class ArcGeekCalculatorProvider(QgsProcessingProvider):
-    def loadAlgorithms(self):
-        self.addAlgorithm(CoordinateCalculatorAlgorithm())
-
-    def id(self):
-        return "arcgeek_calculator"
-
-    def name(self):
-        return "ArcGeek Calculator"
-
-    def longName(self):
-        return self.name()
-
 def calculate_coordinates(layer, calculate_xy, format_dd, format_dms, format_dms2, precision, crs, feedback):
-    transform_to_crs = QgsCoordinateTransform(layer.crs(), crs, QgsProject.instance())
-    transform_to_wgs84 = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+    try:
+        transform_to_crs = QgsCoordinateTransform(layer.crs(), crs, QgsProject.instance())
+        transform_to_wgs84 = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+    except Exception as e:
+        feedback.reportError(f"Error setting up coordinate transforms: {str(e)}")
+        return
 
     total = 100.0 / layer.featureCount() if layer.featureCount() else 0
+    timeout = 1000  # Maximum number of iterations to prevent infinite loops
 
     with edit(layer):
         for current, feature in enumerate(layer.getFeatures()):
-            if feedback.isCanceled():
+            if feedback.isCanceled() or current > timeout:
                 break
 
             try:
+                if not feature.hasGeometry():
+                    feedback.pushInfo(f"Skipping feature {feature.id()} without geometry")
+                    continue
+
                 geom = feature.geometry()
-                if geom.isEmpty():
+                if geom.type() != QgsWkbTypes.PointGeometry:
+                    feedback.pushInfo(f"Skipping non-point feature {feature.id()}")
                     continue
 
                 point = geom.asPoint()
-                point_in_crs = transform_to_crs.transform(point)
-                point_wgs84 = transform_to_wgs84.transform(point_in_crs)
+                
+                try:
+                    point_in_crs = transform_to_crs.transform(point)
+                    point_wgs84 = transform_to_wgs84.transform(point_in_crs)
+                except QgsCsException as e:
+                    feedback.pushInfo(f"Error transforming coordinates for feature {feature.id()}: {str(e)}")
+                    continue
 
                 if calculate_xy:
                     feature.setAttribute('X', round(point_in_crs.x(), precision))
@@ -236,11 +285,14 @@ def calculate_coordinates(layer, calculate_xy, format_dd, format_dms, format_dms
                     feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat'))
                     feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon'))
 
-                layer.updateFeature(feature)
+                if not layer.updateFeature(feature):
+                    feedback.pushInfo(f"Failed to update feature {feature.id()}")
             except Exception as e:
                 feedback.pushInfo(f"Error processing feature {feature.id()}: {str(e)}")
 
             feedback.setProgress(int(current * total))
+
+    feedback.pushInfo(f"Processed {current + 1} features")
 
 def convert_to_dms(decimal_degree, coord_type):
     is_positive = decimal_degree >= 0
@@ -267,3 +319,16 @@ def convert_to_dms2(decimal_degree, coord_type):
         direction = 'E' if is_positive else 'W'
 
     return f"{direction} {degrees:2d}° {minutes:02d}' {seconds:05.2f}\""
+
+class ArcGeekCalculatorProvider(QgsProcessingProvider):
+    def loadAlgorithms(self):
+        self.addAlgorithm(CoordinateCalculatorAlgorithm())
+
+    def id(self):
+        return "arcgeek_calculator"
+
+    def name(self):
+        return self.tr("ArcGeek Calculator")
+
+    def longName(self):
+        return self.name()

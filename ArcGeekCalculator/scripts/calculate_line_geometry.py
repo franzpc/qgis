@@ -140,17 +140,17 @@ class CalculateLineGeometryAlgorithm(QgsProcessingAlgorithm):
 
         unit = self.units[unit_index]
         unit_suffix = self.get_abbreviated_unit_name(unit)
-        length_field = f'length_{unit_suffix}'
+        length_field = f'l_{unit_suffix}'
 
         conv_factor = QgsUnitTypes.fromUnitToUnitFactor(crs.mapUnits(), unit)
 
         fields = source.fields()
         if length_field not in fields.names():
-            fields.append(QgsField(length_field, QVariant.Double, prec=precision))
+            fields.append(QgsField(length_field, QVariant.Double, len=20, prec=precision))
 
         if update_existing:
             if length_field not in source.fields().names():
-                source.dataProvider().addAttributes([QgsField(length_field, QVariant.Double, prec=precision)])
+                source.dataProvider().addAttributes([QgsField(length_field, QVariant.Double, len=20, prec=precision)])
                 source.updateFields()
             sink = source
             sink_id = self.INPUT

@@ -30,7 +30,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                                                        type=QgsProcessingParameterNumber.Double, 
                                                        minValue=0.0, maxValue=0.5, defaultValue=0.25))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Output Basin', QgsProcessing.TypeVectorPolygon))
-        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Output Stream Network', QgsProcessing.TypeVectorLine, optional=True))
+        self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Output Basin Stream Network', QgsProcessing.TypeVectorLine, optional=True))
         self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=True))
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -150,10 +150,10 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         return self.tr('Watershed Basin Delineation')
 
     def group(self):
-        return self.tr('Hydrology')
+        return self.tr('ArcGeek Calculator')
 
     def groupId(self):
-        return 'hydrology'
+        return 'arcgeekcalculator'
 
     def createInstance(self):
         return WatershedBasinDelineationAlgorithm()
@@ -173,7 +173,7 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         
         Outputs:
             Output Basin: A polygon layer representing the delineated watershed basin
-            Output Stream Network: Optional. A line layer representing the clipped stream network within the basin
+            Output Basin Stream Network: Optional. A line layer representing the clipped stream network within the basin
         
         The algorithm performs the following steps:
         1. Fills sinks in the DEM

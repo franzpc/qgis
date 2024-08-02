@@ -4,7 +4,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterNumber,
                        QgsFeature, QgsGeometry, QgsPointXY, QgsField, QgsProject,
                        QgsWkbTypes, QgsFeatureSink, QgsProcessingParameterCrs,
                        QgsFields, QgsProcessingMultiStepFeedback, QgsCoordinateReferenceSystem,
-                       QgsProcessing, QgsProcessingException)
+                       QgsProcessing, QgsProcessingException, QgsProcessingParameterEnum)
 from qgis.PyQt.QtCore import QVariant
 import numpy as np
 
@@ -14,6 +14,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
     INPUT_TABLE = 'INPUT_TABLE'
     FIELD_DISTANCE = 'FIELD_DISTANCE'
     FIELD_ANGLE = 'FIELD_ANGLE'
+    ANGLE_TYPE = 'ANGLE_TYPE'
     FIELD_OBSERVATIONS = 'FIELD_OBSERVATIONS'
     OUTPUT_CRS = 'OUTPUT_CRS'
     OUTPUT_LINE = 'OUTPUT_LINE'
@@ -25,6 +26,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT_TABLE, 'Input table', [QgsProcessing.TypeVector, QgsProcessing.TypeFile], optional=False))
         self.addParameter(QgsProcessingParameterField(self.FIELD_DISTANCE, 'Distance field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=False))
         self.addParameter(QgsProcessingParameterField(self.FIELD_ANGLE, 'Angle field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=False))
+        self.addParameter(QgsProcessingParameterEnum(self.ANGLE_TYPE, 'Angle type in input data', options=['Azimuth', 'Polar'], defaultValue=0))
         self.addParameter(QgsProcessingParameterField(self.FIELD_OBSERVATIONS, 'Observations field', parentLayerParameterName=self.INPUT_TABLE, type=QgsProcessingParameterField.Any, optional=True))
         self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=False))
         self.addParameter(QgsProcessingParameterVectorDestination(self.OUTPUT_LINE, 'Output line layer'))
@@ -38,6 +40,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         source = self.parameterAsSource(parameters, self.INPUT_TABLE, context)
         field_distance = self.parameterAsString(parameters, self.FIELD_DISTANCE, context)
         field_angle = self.parameterAsString(parameters, self.FIELD_ANGLE, context)
+        angle_type = self.parameterAsEnum(parameters, self.ANGLE_TYPE, context)
         field_observations = self.parameterAsString(parameters, self.FIELD_OBSERVATIONS, context)
         output_crs = self.parameterAsCrs(parameters, self.OUTPUT_CRS, context)
 
@@ -85,10 +88,20 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
 
             try:
                 distance = float(feature[field_distance] or 0)
-                angle_degrees = float(feature[field_angle] or 0)
-                angle_radians = np.radians(angle_degrees)
-                x_current = x_previous + distance * np.sin(angle_radians)
-                y_current = y_previous + distance * np.cos(angle_radians)
+                angle = float(feature[field_angle] or 0)
+                
+                # Calculate the next point based on the angle type
+                if angle_type == 0:  # Azimuth
+                    angle_radians = np.radians(angle)
+                    dx = distance * np.sin(angle_radians)
+                    dy = distance * np.cos(angle_radians)
+                else:  # Polar
+                    angle_radians = np.radians(angle)
+                    dx = distance * np.cos(angle_radians)
+                    dy = distance * np.sin(angle_radians)
+                
+                x_current = x_previous + dx
+                y_current = y_previous + dy
                 new_point = QgsPointXY(x_current, y_current)
                 points.append(new_point)
                 
@@ -98,7 +111,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                 point_attributes = [
                     current + 1,
                     float(distance),
-                    float(angle_degrees),
+                    float(angle),  # Store the original angle value
                     float(x_current),
                     float(y_current)
                 ]
@@ -147,6 +160,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         - Input table: A vector layer or table (csv, txt, etc) containing distance and angle data.
         - Distance field: The field in the input table containing distance values.
         - Angle field: The field in the input table containing angle values.
+        - Angle type in input data: Specify whether the input angles are Azimuth or Polar.
         - Observations field (optional): A field for additional information about each point.
         - Output CRS: The coordinate reference system for the output layers.
 
@@ -156,12 +170,16 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
 
         The algorithm reads the input table row by row, calculating new points based on the distance and angle from the previous point. It starts from the given X and Y coordinates and creates a new point for each row in the table.
 
+        Angle types:
+        - Azimuth: Measured clockwise from north (0-360 degrees)
+        - Polar: Measured counterclockwise from east (0-360 degrees)
+
         Use this tool when you need to:
         - Convert tabular distance and angle data into spatial features.
         - Generate a line path from a series of movements.
         - Create point locations from relative positioning data.
 
-        Note: Ensure that you select the correct CRS for your data and that appropriate coordinate transformations are set up in your project properties to avoid potential inaccuracies in the results.
+        Note: Ensure that you select the correct angle type that matches your input data, and that you select the appropriate CRS for your data to avoid potential inaccuracies in the results.
         """
 
     def createInstance(self):

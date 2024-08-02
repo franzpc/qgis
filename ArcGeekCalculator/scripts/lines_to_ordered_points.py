@@ -20,10 +20,10 @@ class LinesToOrderedPointsAlgorithm(QgsProcessingAlgorithm):
         return self.tr('Lines to Ordered Points')
 
     def group(self):
-        return self.tr('Example scripts')
+        return self.tr('ArcGeek Calculator')
 
     def groupId(self):
-        return 'example_scripts'
+        return 'arcgeekcalculator'
 
     def shortHelpString(self):
         return self.tr("""

@@ -6,7 +6,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterVectorLayer
                        QgsFeatureSink, QgsProcessingException,
                        QgsProcessingParameterFeatureSink, QgsUnitTypes, QgsExpression,
                        QgsExpressionContext, QgsExpressionContextUtils, QgsFeature,
-                       QgsCoordinateTransform)
+                       QgsCoordinateTransform, QgsVectorFileWriter)
 
 class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
@@ -165,8 +165,8 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
         perimeter_unit = self.perimeter_units[perimeter_unit_index]
         area_unit_suffix = self.get_abbreviated_unit_name(area_unit, is_area=True)
         perimeter_unit_suffix = self.get_abbreviated_unit_name(perimeter_unit, is_area=False)
-        area_field = f'area_{area_unit_suffix}'
-        perimeter_field = f'perimeter_{perimeter_unit_suffix}'
+        area_field = f'a_{area_unit_suffix}'
+        perimeter_field = f'p_{perimeter_unit_suffix}'
 
         source_area_unit = QgsUnitTypes.distanceToAreaUnit(crs.mapUnits())
         area_conv_factor = QgsUnitTypes.fromUnitToUnitFactor(source_area_unit, area_unit)
@@ -174,15 +174,15 @@ class CalculatePolygonGeometryAlgorithm(QgsProcessingAlgorithm):
 
         fields = source.fields()
         if area_field not in fields.names():
-            fields.append(QgsField(area_field, QVariant.Double, prec=precision))
+            fields.append(QgsField(area_field, QVariant.Double, len=20, prec=precision))
         if perimeter_field not in fields.names():
-            fields.append(QgsField(perimeter_field, QVariant.Double, prec=precision))
+            fields.append(QgsField(perimeter_field, QVariant.Double, len=20, prec=precision))
 
         if update_existing:
             if area_field not in source.fields().names():
-                source.dataProvider().addAttributes([QgsField(area_field, QVariant.Double, prec=precision)])
+                source.dataProvider().addAttributes([QgsField(area_field, QVariant.Double, len=20, prec=precision)])
             if perimeter_field not in source.fields().names():
-                source.dataProvider().addAttributes([QgsField(perimeter_field, QVariant.Double, prec=precision)])
+                source.dataProvider().addAttributes([QgsField(perimeter_field, QVariant.Double, len=20, prec=precision)])
             source.updateFields()
             sink = source
             sink_id = self.INPUT

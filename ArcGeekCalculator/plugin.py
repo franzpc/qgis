@@ -12,6 +12,11 @@ from .scripts.basin_analysis_algorithm import BasinAnalysisAlgorithm
 from .scripts.watershed_stream import WatershedAnalysisAlgorithm
 from .scripts.lines_to_ordered_points import LinesToOrderedPointsAlgorithm
 from .scripts.watershed_basin import WatershedBasinDelineationAlgorithm
+from .scripts.calculate_line_algorithm import CalculateLineAlgorithm
+from .scripts.land_use_change_algorithm import LandUseChangeDetectionAlgorithm
+from .scripts.weighted_sum_tool import WeightedSumTool
+from .scripts.optimized_parcel_division import OptimizedParcelDivisionAlgorithm
+from .scripts.dam_flood_simulation import DamFloodSimulationAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -33,18 +38,30 @@ class ArcGeekCalculator:
             'basin_analysis': BasinAnalysisAlgorithm(),
             'watershed_stream': WatershedAnalysisAlgorithm(),
             'lines_to_ordered_points': LinesToOrderedPointsAlgorithm(),
-            'watershed_basin': WatershedBasinDelineationAlgorithm()
+            'watershed_basin': WatershedBasinDelineationAlgorithm(),
+            'calculate_line': CalculateLineAlgorithm(),
+            'land_use_change': LandUseChangeDetectionAlgorithm(),
+            'weighted_sum': WeightedSumTool(),
+            'optimized_parcel_division': OptimizedParcelDivisionAlgorithm(),
+            'dam_flood_simulation': DamFloodSimulationAlgorithm()
         }
-        
+
         self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
         self.add_action("Calculate Line Geometry", self.run_algorithm('line'), os.path.join(self.plugin_dir, "icons/calculate_length.png"))
         self.add_action("Calculate Polygon Geometry", self.run_algorithm('polygon'), os.path.join(self.plugin_dir, "icons/calculate_area.png"))
         self.add_action("Extract Ordered Points from Polygons", self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
         self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
+        self.add_action("Calculate Line from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
         self.add_separator()
         self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
         self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
         self.add_action("Watershed Morphometric Analysis", self.run_algorithm('basin_analysis'), os.path.join(self.plugin_dir, "icons/watershed_morfo.png"))
+        self.add_separator()
+        self.add_action("Land Use Change Detection", self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
+        self.add_action("Weighted Sum", self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))
+        self.add_action("Dam Flood Simulation", self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
+        self.add_separator()
+        self.add_action("Optimized Parcel Division", self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
         self.add_separator()
         self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
@@ -143,11 +160,6 @@ class ArcGeekCalculator:
                 action.triggered.connect(lambda: self.run_algorithm('line')())
                 menu.insertAction(menu.actions()[-14], action)
                 self.context_menu_actions.append(action)
-                
-                action_lines_to_points = QAction(QIcon(os.path.join(self.plugin_dir, "icons/lines_to_points.png")), "Lines to Ordered Points", menu)
-                action_lines_to_points.triggered.connect(lambda: self.run_algorithm('lines_to_ordered_points')())
-                menu.insertAction(menu.actions()[-14], action_lines_to_points)
-                self.context_menu_actions.append(action_lines_to_points)
             elif geometry_type == QgsWkbTypes.PolygonGeometry:
                 action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
                 action.triggered.connect(lambda: self.run_algorithm('polygon')())

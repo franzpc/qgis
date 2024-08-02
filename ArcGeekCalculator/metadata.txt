@@ -1,22 +1,31 @@
 [general]
 name=ArcGeek Calculator
-qgisMinimumVersion=3.0
-description=A comprehensive toolset for coordinate calculations, conversions, and spatial operations in QGIS.
-version=1.4beta
+qgisMinimumVersion=3.14
+description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, and flood simulation in QGIS.
+version=1.8beta
 author=ArcGeek
 email=soporte@arcgeek.com
-about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, and anyone working with spatial data:
+about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
     1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
-    2. Calculate Line from Coordinates and Table: Generate line features from tabular data (CSV, TXT, or vector layers) containing distances and angles.
-    3. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
-    4. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
-    5. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
+    2. Calculate Line Geometry: Calculate length and azimuth for line features.
+    3. Calculate Polygon Geometry: Calculate area and perimeter for polygon features.
+    4. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
+    5. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
+    6. Lines to Ordered Points: Convert line features to ordered point features.
+    7. Calculate Line from Coordinates and Table: Generate a line and points from starting coordinates and a table of distances and angles.
+    8. Stream Network with Order: Generate a stream network with Strahler order.
+    9. Watershed Basin Delineation: Delineate watershed basins from a DEM and pour points.
+    10. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
+    11. Land Use Change Detection: Analyze changes in land use between two time periods.
+    12. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
+    13. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+    14. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
 tracker=https://github.com/franzpc/qgis/issues
 repository=https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, analysis, conversion, dms, decimal degrees, line generation, xy navigation, csv import, polygon extraction, watershed analysis
+tags=coordinates, calculator, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam
 category=Analysis
 icon=icon.png
 experimental=False

@@ -1,4 +1,4 @@
-from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QHBoxLayout, QTableWidget, QTableWidgetItem, QAbstractItemView
+from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QHBoxLayout, QTableWidget, QTableWidgetItem, QAbstractItemView, QApplication
 from qgis.PyQt.QtCore import Qt, QSignalBlocker
 from qgis.core import (QgsPointXY, QgsGeometry, QgsFeature, QgsVectorLayer, QgsProject, 
                        QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsCoordinateTransformContext, Qgis)
@@ -61,9 +61,17 @@ class GoToXYDialog(QDialog):
         self.capture_button.clicked.connect(self.capture_coordinate)
         self.layout.addWidget(self.capture_button)
         
+        self.button_layout = QHBoxLayout()
+        
         self.clear_history_button = QPushButton("Clear History")
         self.clear_history_button.clicked.connect(self.clear_history)
-        self.layout.addWidget(self.clear_history_button)
+        self.button_layout.addWidget(self.clear_history_button)
+        
+        self.copy_coordinates_button = QPushButton("Copy Coordinates")
+        self.copy_coordinates_button.clicked.connect(self.copy_coordinates)
+        self.button_layout.addWidget(self.copy_coordinates_button)
+        
+        self.layout.addLayout(self.button_layout)
         
         self.setLayout(self.layout)
         
@@ -202,3 +210,21 @@ class GoToXYDialog(QDialog):
         
         vl.updateExtents()
         QgsProject.instance().addMapLayer(vl)
+
+    def copy_coordinates(self):
+        if self.history_table.rowCount() == 0:
+            self.iface.messageBar().pushMessage("Info", "No coordinates to copy.", level=Qgis.Info)
+            return
+        
+        coordinates = ["X/Lon\tY/Lat\tCRS"]  # Add header
+        for row in range(self.history_table.rowCount()):
+            x = self.history_table.item(row, 0).text()
+            y = self.history_table.item(row, 1).text()
+            crs = self.history_table.item(row, 2).text()
+            coordinates.append(f"{x}\t{y}\t{crs}")
+        
+        coordinate_text = "\n".join(coordinates)
+        clipboard = QApplication.clipboard()
+        clipboard.setText(coordinate_text)
+        
+        self.iface.messageBar().pushMessage("Success", "Coordinates copied to clipboard.", level=Qgis.Success)
