@@ -1,10 +1,11 @@
 from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterFeatureSource, 
                        QgsProcessingParameterBoolean, QgsProcessingParameterVectorDestination, 
-                       QgsProcessing, QgsProcessingException, QgsField, edit, QgsVectorLayer, 
-                       QgsFeatureRequest, QgsVectorFileWriter, QgsCoordinateReferenceSystem,
-                       QgsCoordinateTransform, QgsProject, QgsProcessingProvider,
-                       QgsProcessingParameterNumber, QgsProcessingParameterCrs, QgsCsException,
-                       QgsWkbTypes)
+                       QgsProcessing, QgsProcessingException, QgsField, QgsFeature,
+                       QgsVectorLayer, QgsFeatureRequest, QgsVectorFileWriter, 
+                       QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, 
+                       QgsProcessingProvider, QgsProcessingParameterNumber, 
+                       QgsProcessingParameterCrs, QgsCsException, QgsWkbTypes, QgsFields,
+                       QgsGeometry, QgsFeatureSink, QgsProcessingUtils)
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
 import traceback
 import os
@@ -151,148 +152,183 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
             if not crs.isValid():
                 crs = source.sourceCrs()
 
+            feedback.pushInfo(f"Input CRS: {crs.authid()}")
+            feedback.pushInfo(f"Input layer feature count: {source.featureCount()}")
+
+            # Prepare fields
+            field_definitions = {
+                'X': QgsField('X', QVariant.Double, len=20, prec=precision),
+                'Y': QgsField('Y', QVariant.Double, len=20, prec=precision),
+                'DD_Lat': QgsField('DD_Lat', QVariant.Double, len=20, prec=precision),
+                'DD_Lon': QgsField('DD_Lon', QVariant.Double, len=20, prec=precision),
+                'DMS_Lat': QgsField('DMS_Lat', QVariant.String, len=20),
+                'DMS_Lon': QgsField('DMS_Lon', QVariant.String, len=20),
+                'Lat_DMS': QgsField('Lat_DMS', QVariant.String, len=20),
+                'Lon_DMS': QgsField('Lon_DMS', QVariant.String, len=20)
+            }
+
+            fields_to_add = []
+            if calculate_xy:
+                fields_to_add.extend(['X', 'Y'])
+            if format_dd:
+                fields_to_add.extend(['DD_Lat', 'DD_Lon'])
+            if format_dms:
+                fields_to_add.extend(['DMS_Lat', 'DMS_Lon'])
+            if format_dms2:
+                fields_to_add.extend(['Lat_DMS', 'Lon_DMS'])
+
+            feedback.pushInfo(f"Fields to be added or updated: {', '.join(fields_to_add)}")
+
+            # Prepare transformations
+            transform_to_crs = QgsCoordinateTransform(source.sourceCrs(), crs, QgsProject.instance())
+            transform_to_wgs84 = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+
             if modify_layer:
-                target_layer = self.parameterAsVectorLayer(parameters, self.INPUT, context)
+                # Modifying the original layer
+                layer = self.parameterAsVectorLayer(parameters, self.INPUT, context)
+                if not layer:
+                    raise QgsProcessingException(self.tr("Could not retrieve the input layer for modification"))
+                
+                # Remove existing fields if they exist
+                fields_to_remove = []
+                for field_name in fields_to_add:
+                    if layer.fields().indexOf(field_name) != -1:
+                        fields_to_remove.append(layer.fields().indexOf(field_name))
+                
+                if fields_to_remove:
+                    layer.dataProvider().deleteAttributes(fields_to_remove)
+                    layer.updateFields()
+
+                # Add new fields
+                new_fields = [field_definitions[field_name] for field_name in fields_to_add]
+                layer.dataProvider().addAttributes(new_fields)
+                layer.updateFields()
+                
+                # Update features
+                total_features = layer.featureCount()
+                layer.startEditing()
+
+                # Process features in batches
+                batch_size = 500
+                for i in range(0, total_features, batch_size):
+                    if feedback.isCanceled():
+                        break
+                    
+                    start = i
+                    end = min(i + batch_size, total_features)
+                    
+                    attr_map = {}
+                    feature_ids = list(range(start, end))  # Convert range to list
+                    for feature in layer.getFeatures(QgsFeatureRequest().setFilterFids(feature_ids)):
+                        if feedback.isCanceled():
+                            break
+                        
+                        geom = feature.geometry()
+                        if geom.type() != QgsWkbTypes.PointGeometry:
+                            continue
+                        
+                        point = geom.asPoint()
+                        try:
+                            point_in_crs = transform_to_crs.transform(point)
+                            point_wgs84 = transform_to_wgs84.transform(point_in_crs)
+                        except QgsCsException:
+                            continue
+                        
+                        # Prepare attributes
+                        attrs = {}
+                        if calculate_xy:
+                            attrs['X'] = round(point_in_crs.x(), precision)
+                            attrs['Y'] = round(point_in_crs.y(), precision)
+                        if format_dd:
+                            attrs['DD_Lat'] = round(point_wgs84.y(), precision)
+                            attrs['DD_Lon'] = round(point_wgs84.x(), precision)
+                        if format_dms:
+                            attrs['DMS_Lat'] = convert_to_dms(point_wgs84.y(), 'lat')
+                            attrs['DMS_Lon'] = convert_to_dms(point_wgs84.x(), 'lon')
+                        if format_dms2:
+                            attrs['Lat_DMS'] = convert_to_dms2(point_wgs84.y(), 'lat')
+                            attrs['Lon_DMS'] = convert_to_dms2(point_wgs84.x(), 'lon')
+                        
+                        # Prepare attribute map for the feature
+                        feature_attr_map = {}
+                        for field_name, value in attrs.items():
+                            field_index = layer.fields().lookupField(field_name)
+                            if field_index != -1:
+                                feature_attr_map[field_index] = value
+                        
+                        attr_map[feature.id()] = feature_attr_map
+                    
+                    # Update attributes in batch
+                    layer.dataProvider().changeAttributeValues(attr_map)
+                    
+                    feedback.setProgress(int(end / total_features * 100))
+                
+                layer.commitChanges()
+                feedback.pushInfo(f"Modified input layer: {layer.id()}")
+                return {self.OUTPUT: layer.id()}
             else:
-                target_layer = QgsVectorLayer("Point?crs={}".format(source.sourceCrs().authid()), "TemporaryLayer", "memory")
-                target_layer.startEditing()
-                target_layer.dataProvider().addAttributes(source.fields().toList())
-                target_layer.updateFields()
-
-                for feature in source.getFeatures():
-                    target_layer.addFeature(feature)
-                target_layer.commitChanges()
-
-            if not target_layer.fields():
-                raise QgsProcessingException(self.tr("The layer has no fields."))
-
-            # Add new fields or update existing ones
-            with edit(target_layer):
-                fields_to_add = []
-                if calculate_xy:
-                    fields_to_add.extend([
-                        QgsField('X', QVariant.Double, len=20, prec=precision),
-                        QgsField('Y', QVariant.Double, len=20, prec=precision)
-                    ])
-                if format_dd:
-                    fields_to_add.extend([
-                        QgsField('DD_Lat', QVariant.Double, len=20, prec=precision),
-                        QgsField('DD_Lon', QVariant.Double, len=20, prec=precision)
-                    ])
-                if format_dms:
-                    fields_to_add.extend([
-                        QgsField('DMS_Lat', QVariant.String, len=20),
-                        QgsField('DMS_Lon', QVariant.String, len=20)
-                    ])
-                if format_dms2:
-                    fields_to_add.extend([
-                        QgsField('Lat_DMS', QVariant.String, len=20),
-                        QgsField('Lon_DMS', QVariant.String, len=20)
-                    ])
-
-                for field in fields_to_add:
-                    if target_layer.fields().lookupField(field.name()) == -1:
-                        target_layer.addAttribute(field)
-                    else:
-                        idx = target_layer.fields().lookupField(field.name())
-                        target_layer.deleteAttribute(idx)
-                        target_layer.addAttribute(field)
-
-            target_layer.updateFields()
-
-            calculate_coordinates(target_layer, calculate_xy, format_dd, format_dms, format_dms2, precision, crs, feedback)
-
-            if not modify_layer:
-                output_file = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
-                output_format = QgsVectorFileWriter.driverForExtension(os.path.splitext(output_file)[1])
+                # Creating a new layer
+                output_fields = source.fields()
+                for field_name in fields_to_add:
+                    output_fields.append(field_definitions[field_name])
                 
-                if output_format == "ESRI Shapefile":
-                    # Truncate field names to 10 characters for Shapefile compatibility
-                    with edit(target_layer):
-                        for idx, field in enumerate(target_layer.fields()):
-                            if len(field.name()) > 10:
-                                new_name = field.name()[:10]
-                                target_layer.renameAttribute(idx, new_name)
+                # Create the output layer
+                (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT, context,
+                                                       output_fields, source.wkbType(), source.sourceCrs())
+                if sink is None:
+                    raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
                 
-                save_options = QgsVectorFileWriter.SaveVectorOptions()
-                save_options.driverName = output_format
-                save_options.fileEncoding = "UTF-8"
+                # Process features
+                total_features = source.featureCount()
+                for current, feature in enumerate(source.getFeatures()):
+                    if feedback.isCanceled():
+                        break
+                    
+                    geom = feature.geometry()
+                    if geom.type() != QgsWkbTypes.PointGeometry:
+                        sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                        continue
+                    
+                    point = geom.asPoint()
+                    try:
+                        point_in_crs = transform_to_crs.transform(point)
+                        point_wgs84 = transform_to_wgs84.transform(point_in_crs)
+                    except QgsCsException:
+                        sink.addFeature(feature, QgsFeatureSink.FastInsert)
+                        continue
+                    
+                    new_feature = QgsFeature(output_fields)
+                    new_feature.setGeometry(feature.geometry())
+                    
+                    # Copy existing attributes
+                    for i in range(len(source.fields())):
+                        new_feature.setAttribute(i, feature.attribute(i))
+                    
+                    # Add new attributes
+                    if calculate_xy:
+                        new_feature.setAttribute('X', round(point_in_crs.x(), precision))
+                        new_feature.setAttribute('Y', round(point_in_crs.y(), precision))
+                    if format_dd:
+                        new_feature.setAttribute('DD_Lat', round(point_wgs84.y(), precision))
+                        new_feature.setAttribute('DD_Lon', round(point_wgs84.x(), precision))
+                    if format_dms:
+                        new_feature.setAttribute('DMS_Lat', convert_to_dms(point_wgs84.y(), 'lat'))
+                        new_feature.setAttribute('DMS_Lon', convert_to_dms(point_wgs84.x(), 'lon'))
+                    if format_dms2:
+                        new_feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat'))
+                        new_feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon'))
+                    
+                    sink.addFeature(new_feature, QgsFeatureSink.FastInsert)
+                    feedback.setProgress(int((current + 1) / total_features * 100))
                 
-                transform_context = QgsProject.instance().transformContext()
-                error = QgsVectorFileWriter.writeAsVectorFormatV3(target_layer, 
-                                                                  output_file,
-                                                                  transform_context,
-                                                                  save_options)
-                
-                if error[0] != QgsVectorFileWriter.NoError:
-                    raise QgsProcessingException(self.tr(f"Error writing output: {error[1]}"))
-                
-                return {self.OUTPUT: output_file}
-
-            return {self.OUTPUT: target_layer.id()}
+                feedback.pushInfo(f"Created new layer: {dest_id}")
+                return {self.OUTPUT: dest_id}
 
         except Exception as e:
             feedback.reportError(self.tr(f"Error in processAlgorithm: {str(e)}"), fatalError=True)
             feedback.pushInfo(traceback.format_exc())
             raise
 
-def calculate_coordinates(layer, calculate_xy, format_dd, format_dms, format_dms2, precision, crs, feedback):
-    try:
-        transform_to_crs = QgsCoordinateTransform(layer.crs(), crs, QgsProject.instance())
-        transform_to_wgs84 = QgsCoordinateTransform(crs, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
-    except Exception as e:
-        feedback.reportError(f"Error setting up coordinate transforms: {str(e)}")
-        return
-
-    total = 100.0 / layer.featureCount() if layer.featureCount() else 0
-    timeout = 1000  # Maximum number of iterations to prevent infinite loops
-
-    with edit(layer):
-        for current, feature in enumerate(layer.getFeatures()):
-            if feedback.isCanceled() or current > timeout:
-                break
-
-            try:
-                if not feature.hasGeometry():
-                    feedback.pushInfo(f"Skipping feature {feature.id()} without geometry")
-                    continue
-
-                geom = feature.geometry()
-                if geom.type() != QgsWkbTypes.PointGeometry:
-                    feedback.pushInfo(f"Skipping non-point feature {feature.id()}")
-                    continue
-
-                point = geom.asPoint()
-                
-                try:
-                    point_in_crs = transform_to_crs.transform(point)
-                    point_wgs84 = transform_to_wgs84.transform(point_in_crs)
-                except QgsCsException as e:
-                    feedback.pushInfo(f"Error transforming coordinates for feature {feature.id()}: {str(e)}")
-                    continue
-
-                if calculate_xy:
-                    feature.setAttribute('X', round(point_in_crs.x(), precision))
-                    feature.setAttribute('Y', round(point_in_crs.y(), precision))
-
-                if format_dd:
-                    feature.setAttribute('DD_Lat', round(point_wgs84.y(), precision))
-                    feature.setAttribute('DD_Lon', round(point_wgs84.x(), precision))
-                if format_dms:
-                    feature.setAttribute('DMS_Lat', convert_to_dms(point_wgs84.y(), 'lat'))
-                    feature.setAttribute('DMS_Lon', convert_to_dms(point_wgs84.x(), 'lon'))
-                if format_dms2:
-                    feature.setAttribute('Lat_DMS', convert_to_dms2(point_wgs84.y(), 'lat'))
-                    feature.setAttribute('Lon_DMS', convert_to_dms2(point_wgs84.x(), 'lon'))
-
-                if not layer.updateFeature(feature):
-                    feedback.pushInfo(f"Failed to update feature {feature.id()}")
-            except Exception as e:
-                feedback.pushInfo(f"Error processing feature {feature.id()}: {str(e)}")
-
-            feedback.setProgress(int(current * total))
-
-    feedback.pushInfo(f"Processed {current + 1} features")
 
 def convert_to_dms(decimal_degree, coord_type):
     is_positive = decimal_degree >= 0
@@ -306,6 +342,8 @@ def convert_to_dms(decimal_degree, coord_type):
         direction = 'E' if is_positive else 'W'
 
     return f"{degrees:2d}° {minutes:02d}' {seconds:05.2f}\" {direction}"
+
+
 
 def convert_to_dms2(decimal_degree, coord_type):
     is_positive = decimal_degree >= 0

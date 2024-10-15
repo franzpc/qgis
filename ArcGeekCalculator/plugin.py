@@ -1,5 +1,5 @@
 import os
-from qgis.core import QgsApplication, QgsMapLayer, QgsWkbTypes, Qgis
+from qgis.core import QgsApplication, QgsMapLayer, QgsWkbTypes, Qgis, QgsLayerTreeNode
 from qgis.gui import QgisInterface
 from PyQt5.QtWidgets import QAction, QMenu
 from PyQt5.QtGui import QIcon
@@ -17,6 +17,11 @@ from .scripts.land_use_change_algorithm import LandUseChangeDetectionAlgorithm
 from .scripts.weighted_sum_tool import WeightedSumTool
 from .scripts.optimized_parcel_division import OptimizedParcelDivisionAlgorithm
 from .scripts.dam_flood_simulation import DamFloodSimulationAlgorithm
+from .scripts.export_to_csv import ExportToCSVAlgorithm
+from .scripts.kriging_analysis import KrigingAnalysisAlgorithm
+from .scripts.satellite_index_calculator import SatelliteIndexCalculatorAlgorithm
+from .scripts.basemap_manager import BasemapManager
+from .scripts.screen_capture import ScreenCaptureDialog, run_screen_capture
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -28,6 +33,13 @@ class ArcGeekCalculator:
         self.plugin_dir = os.path.dirname(__file__)
         self.context_menu_actions = []
         self.map_tool = None
+
+    def run_basemap_manager(self):
+        dialog = BasemapManager(self.iface)
+        dialog.exec_()
+
+    def run_screen_capture(self):
+        run_screen_capture(self.iface)
 
     def initGui(self):
         self.algorithms = {
@@ -43,7 +55,11 @@ class ArcGeekCalculator:
             'land_use_change': LandUseChangeDetectionAlgorithm(),
             'weighted_sum': WeightedSumTool(),
             'optimized_parcel_division': OptimizedParcelDivisionAlgorithm(),
-            'dam_flood_simulation': DamFloodSimulationAlgorithm()
+            'dam_flood_simulation': DamFloodSimulationAlgorithm(),
+            'export_to_csv': ExportToCSVAlgorithm(),
+            'kriging_analysis': KrigingAnalysisAlgorithm(),
+            'satellite_index': SatelliteIndexCalculatorAlgorithm(),
+            'basemap_manager': BasemapManager(self.iface)
         }
 
         self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
@@ -52,6 +68,7 @@ class ArcGeekCalculator:
         self.add_action("Extract Ordered Points from Polygons", self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
         self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
         self.add_action("Calculate Line from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
+        self.add_action("Export to CSV (Excel compatible)", self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
         self.add_separator()
         self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
         self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
@@ -60,8 +77,13 @@ class ArcGeekCalculator:
         self.add_action("Land Use Change Detection", self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
         self.add_action("Weighted Sum", self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))
         self.add_action("Dam Flood Simulation", self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
+        self.add_action("Kriging Analysis", self.run_algorithm('kriging_analysis'), os.path.join(self.plugin_dir, "icons/kriging.png"))
         self.add_separator()
         self.add_action("Optimized Parcel Division", self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
+        self.add_separator()
+        self.add_action("Manage Basemaps (Google, Bing, Esri)", self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))
+        self.add_action("Screen Capture", self.run_screen_capture, os.path.join(self.plugin_dir, "icons/screen_capture.png"))
+        self.add_action("Satellite Index Calculator", self.run_algorithm('satellite_index'), os.path.join(self.plugin_dir, "icons/satellite_index.png"))
         self.add_separator()
         self.add_action("Go to XY", self.run_go_to_xy, os.path.join(self.plugin_dir, "icons/gotoXY.png"))
 
@@ -86,11 +108,8 @@ class ArcGeekCalculator:
 
     def add_action(self, text, callback, icon_path=None):
         if icon_path and os.path.exists(icon_path):
-            print(f"Icon path found: {icon_path}")
             action = QAction(QIcon(icon_path), text, self.iface.mainWindow())
         else:
-            if icon_path:
-                print(f"Icon path not found: {icon_path}")
             action = QAction(text, self.iface.mainWindow())
         action.triggered.connect(callback)
         self.iface.addPluginToMenu(self.menu, action)
@@ -134,37 +153,50 @@ class ArcGeekCalculator:
 
     def add_layer_menu_items(self, menu):
         # Safely clear previous actions
-        for action in self.context_menu_actions[:]:  # Iterate over a copy of the list
+        for action in self.context_menu_actions[:]:
             try:
-                if action in menu.actions():  # Check if the action is still in the menu
+                if action in menu.actions():
                     menu.removeAction(action)
                 self.context_menu_actions.remove(action)
             except RuntimeError:
-                # The action no longer exists, simply remove it from our list
                 self.context_menu_actions.remove(action)
             except Exception as e:
-                # Log any other unexpected errors
                 print(f"Error removing action: {str(e)}")
 
-        layer = self.iface.layerTreeView().currentLayer()
-        if layer and layer.type() == QgsMapLayer.VectorLayer:
-            geometry_type = layer.geometryType()
+        # Get the current node
+        current_node = self.iface.layerTreeView().currentNode()
+        
+        # Check if the current node is a layer (not a group)
+        if isinstance(current_node, QgsLayerTreeNode) and current_node.nodeType() == QgsLayerTreeNode.NodeLayer:
+            # Use currentLayer() method which is available in both QGIS 3.34 and 3.38
+            layer = self.iface.layerTreeView().currentLayer()
+            if layer and layer.type() == QgsMapLayer.VectorLayer:
+                geometry_type = layer.geometryType()
 
-            if geometry_type == QgsWkbTypes.PointGeometry:
-                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), "Calculate XY Coordinates", menu)
-                action.triggered.connect(lambda: self.run_algorithm('coordinate')())
-                menu.insertAction(menu.actions()[-14], action)
-                self.context_menu_actions.append(action)
-            elif geometry_type == QgsWkbTypes.LineGeometry:
-                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), "Calculate Length", menu)
-                action.triggered.connect(lambda: self.run_algorithm('line')())
-                menu.insertAction(menu.actions()[-14], action)
-                self.context_menu_actions.append(action)
-            elif geometry_type == QgsWkbTypes.PolygonGeometry:
-                action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
-                action.triggered.connect(lambda: self.run_algorithm('polygon')())
-                menu.insertAction(menu.actions()[-14], action)
-                self.context_menu_actions.append(action)
+                if geometry_type == QgsWkbTypes.PointGeometry:
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_xy.png")), "Calculate XY Coordinates", menu)
+                    action.triggered.connect(lambda: self.run_algorithm('coordinate')())
+                    self.add_action_to_menu(menu, action)
+                elif geometry_type == QgsWkbTypes.LineGeometry:
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_length.png")), "Calculate Length", menu)
+                    action.triggered.connect(lambda: self.run_algorithm('line')())
+                    self.add_action_to_menu(menu, action)
+                elif geometry_type == QgsWkbTypes.PolygonGeometry:
+                    action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/calculate_area.png")), "Calculate Area and Perimeter", menu)
+                    action.triggered.connect(lambda: self.run_algorithm('polygon')())
+                    self.add_action_to_menu(menu, action)
+
+    def add_action_to_menu(self, menu, action):
+        # Find a suitable position to insert the action
+        insert_position = 0
+        for i, existing_action in enumerate(menu.actions()):
+            if existing_action.isSeparator() or existing_action.menu():
+                insert_position = i
+                break
+        
+        # Insert the action at the found position
+        menu.insertAction(menu.actions()[insert_position] if insert_position < len(menu.actions()) else None, action)
+        self.context_menu_actions.append(action)
 
     def add_map_menu_items(self, menu):
         action = QAction(QIcon(os.path.join(self.plugin_dir, "icons/gotoXY.png")), "Go to XY", menu)

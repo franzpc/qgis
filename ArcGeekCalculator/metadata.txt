@@ -1,8 +1,8 @@
 [general]
 name=ArcGeek Calculator
-qgisMinimumVersion=3.14
-description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, and flood simulation in QGIS.
-version=1.8beta
+qgisMinimumVersion=3.34
+description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more in QGIS. Includes tools for geometry calculations (area, perimeter, length), basemaps from Google Maps, Esri, Bing, and others.
+version=2.3beta
 author=ArcGeek
 email=soporte@arcgeek.com
 about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
@@ -20,12 +20,17 @@ about=This plugin provides a suite of tools for GIS analysts, cartographers, sur
     12. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
     13. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
     14. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
+    15. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
+    16. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+    17. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+    18. Screen Capture: Capture and georeference the current map view.
+    19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
 tracker=https://github.com/franzpc/qgis/issues
 repository=https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam
+tags=coordinates, calculator, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export
 category=Analysis
 icon=icon.png
 experimental=False

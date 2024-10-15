@@ -1,10 +1,9 @@
 from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterRasterLayer, 
                        QgsProcessingParameterFeatureSink, QgsProcessingParameterPoint, 
-                       QgsProcessingParameterCrs, QgsCoordinateReferenceSystem, 
                        QgsWkbTypes, QgsField, QgsProcessingUtils, QgsFields, 
                        QgsVectorLayer, QgsProject, QgsFeatureSink, QgsProcessing, QgsFeature,
                        QgsProcessingParameterVectorLayer, QgsProcessingException,
-                       QgsProcessingParameterNumber)
+                       QgsProcessingParameterNumber, QgsRasterLayer)
 from qgis.PyQt.QtCore import QVariant, QCoreApplication
 import processing
 
@@ -14,9 +13,9 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
     INPUT_STREAM = 'INPUT_STREAM'
     OUTPUT_BASIN = 'OUTPUT_BASIN'
     OUTPUT_STREAM = 'OUTPUT_STREAM'
-    OUTPUT_CRS = 'OUTPUT_CRS'
     SMOOTH_ITERATIONS = 'SMOOTH_ITERATIONS'
     SMOOTH_OFFSET = 'SMOOTH_OFFSET'
+    MAX_RASTER_SIZE = 100000000  # 100 million cells, adjust as needed
 
     def initAlgorithm(self, config=None):
         self.addParameter(QgsProcessingParameterRasterLayer(self.INPUT_DEM, 'Input DEM'))
@@ -25,19 +24,17 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
                                                             types=[QgsProcessing.TypeVectorLine], optional=True))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_ITERATIONS, 'Smoothing Iterations', 
                                                        type=QgsProcessingParameterNumber.Integer, 
-                                                       minValue=0, maxValue=10, defaultValue=2))
+                                                       minValue=0, maxValue=10, defaultValue=1))
         self.addParameter(QgsProcessingParameterNumber(self.SMOOTH_OFFSET, 'Smoothing Offset', 
                                                        type=QgsProcessingParameterNumber.Double, 
                                                        minValue=0.0, maxValue=0.5, defaultValue=0.25))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_BASIN, 'Output Basin', QgsProcessing.TypeVectorPolygon))
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT_STREAM, 'Output Basin Stream Network', QgsProcessing.TypeVectorLine, optional=True))
-        self.addParameter(QgsProcessingParameterCrs(self.OUTPUT_CRS, 'Output CRS', optional=True))
 
     def processAlgorithm(self, parameters, context, feedback):
         dem = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
         pour_point = self.parameterAsPoint(parameters, self.POUR_POINT, context)
         input_stream = self.parameterAsVectorLayer(parameters, self.INPUT_STREAM, context)
-        output_crs = self.parameterAsCrs(parameters, self.OUTPUT_CRS, context)
         smooth_iterations = self.parameterAsInt(parameters, self.SMOOTH_ITERATIONS, context)
         smooth_offset = self.parameterAsDouble(parameters, self.SMOOTH_OFFSET, context)
 
@@ -47,9 +44,30 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         if input_stream and input_stream.geometryType() != QgsWkbTypes.LineGeometry:
             raise QgsProcessingException(self.tr('Input Stream Network must be a line layer'))
 
+        # Check and resample DEM if necessary
+        original_cell_size = dem.rasterUnitsPerPixelX()
+        cell_size_multiplier = 1
+        max_attempts = 3
+        
+        for attempt in range(max_attempts):
+            current_cell_size = original_cell_size * cell_size_multiplier
+            resampled_dem = self.resample_dem(dem, current_cell_size, context, feedback)
+            
+            raster_size = resampled_dem.width() * resampled_dem.height()
+            if raster_size <= self.MAX_RASTER_SIZE:
+                if attempt > 0:
+                    feedback.pushInfo(self.tr(f'DEM resampled to {current_cell_size:.2f} units per pixel for processing.'))
+                break
+            
+            cell_size_multiplier *= 3
+        
+        if raster_size > self.MAX_RASTER_SIZE:
+            raise QgsProcessingException(self.tr('Input DEM is too large to process efficiently even after resampling. '
+                                                 'Please use a smaller area or lower resolution DEM.'))
+
         # Step 1: Fill sinks
         filled_dem = processing.run('grass7:r.fill.dir', {
-            'input': dem,
+            'input': resampled_dem,
             'format': 0,
             'output': 'TEMPORARY_OUTPUT',
             'direction': 'TEMPORARY_OUTPUT',
@@ -98,15 +116,6 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         # Load the vector layer
         basin_layer = smoothed_basin  # smoothed_basin is already a QgsVectorLayer
 
-        # Reproject the output if necessary
-        if output_crs.isValid() and output_crs != basin_layer.crs():
-            reprojected = processing.run('native:reprojectlayer', {
-                'INPUT': basin_layer,
-                'TARGET_CRS': output_crs,
-                'OUTPUT': 'memory:'
-            }, context=context, feedback=feedback)['OUTPUT']
-            basin_layer = reprojected
-
         # Save the basin result
         (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT_BASIN, context,
                                                basin_layer.fields(), QgsWkbTypes.Polygon, basin_layer.crs())
@@ -143,6 +152,22 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
 
         return results
 
+    def resample_dem(self, dem, new_cell_size, context, feedback):
+        extent = dem.extent()
+        width = int(extent.width() / new_cell_size)
+        height = int(extent.height() / new_cell_size)
+        
+        resampled = processing.run("gdal:warpreproject", {
+            'INPUT': dem,
+            'SOURCE_CRS': dem.crs(),
+            'TARGET_CRS': dem.crs(),
+            'RESAMPLING': 0,  # Nearest neighbor
+            'TARGET_RESOLUTION': new_cell_size,
+            'OUTPUT': QgsProcessing.TEMPORARY_OUTPUT
+        }, context=context, feedback=feedback)['OUTPUT']
+        
+        return QgsRasterLayer(resampled, 'resampled_dem', 'gdal')
+
     def name(self):
         return 'watershedbasindelineation'
 
@@ -163,25 +188,27 @@ class WatershedBasinDelineationAlgorithm(QgsProcessingAlgorithm):
         This algorithm delineates a watershed basin based on a Digital Elevation Model (DEM) and a pour point.
         It uses GRASS GIS algorithms for hydrological analysis and watershed delineation.
         
+        For large, high-resolution DEMs, the algorithm may automatically resample the input to a lower resolution to enable processing.
+        
         Parameters:
             Input DEM: A raster layer representing the terrain elevation
             Pour Point: The outlet point of the watershed
             Input Stream Network: Optional. A line vector layer representing the stream network
             Smoothing Iterations: Number of iterations for smoothing the basin boundary (0-10)
             Smoothing Offset: Offset value for smoothing (0.0-0.5)
-            Output CRS: Optional. The coordinate reference system for the output
         
         Outputs:
             Output Basin: A polygon layer representing the delineated watershed basin
             Output Basin Stream Network: Optional. A line layer representing the clipped stream network within the basin
         
         The algorithm performs the following steps:
-        1. Fills sinks in the DEM
-        2. Calculates flow direction and accumulation
-        3. Delineates the watershed based on the pour point
-        4. Converts the raster watershed to a vector polygon
-        5. Applies smoothing to the basin boundary
-        6. Clips the input stream network to the basin boundary (if provided)
+        1. Checks and resamples the DEM if necessary
+        2. Fills sinks in the DEM
+        3. Calculates flow direction and accumulation
+        4. Delineates the watershed based on the pour point
+        5. Converts the raster watershed to a vector polygon
+        6. Applies smoothing to the basin boundary
+        7. Clips the input stream network to the basin boundary (if provided)
         
         Note: The accuracy of the watershed delineation depends on the resolution and quality of the input DEM.
         """)

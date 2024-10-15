@@ -6,7 +6,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingParameterNumber,
                        QgsFields, QgsProcessingMultiStepFeedback, QgsCoordinateReferenceSystem,
                        QgsProcessing, QgsProcessingException, QgsProcessingParameterEnum)
 from qgis.PyQt.QtCore import QVariant
-import numpy as np
+import math
 
 class CalculateLineAlgorithm(QgsProcessingAlgorithm):
     INPUT_X = 'INPUT_X'
@@ -92,13 +92,13 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
                 
                 # Calculate the next point based on the angle type
                 if angle_type == 0:  # Azimuth
-                    angle_radians = np.radians(angle)
-                    dx = distance * np.sin(angle_radians)
-                    dy = distance * np.cos(angle_radians)
+                    angle_radians = math.radians(angle)
+                    dx = distance * math.sin(angle_radians)
+                    dy = distance * math.cos(angle_radians)
                 else:  # Polar
-                    angle_radians = np.radians(angle)
-                    dx = distance * np.cos(angle_radians)
-                    dy = distance * np.sin(angle_radians)
+                    angle_radians = math.radians(angle)
+                    dx = distance * math.cos(angle_radians)
+                    dy = distance * math.sin(angle_radians)
                 
                 x_current = x_previous + dx
                 y_current = y_previous + dy

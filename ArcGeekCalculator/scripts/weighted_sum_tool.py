@@ -7,7 +7,7 @@ from qgis.analysis import QgsRasterCalculator, QgsRasterCalculatorEntry
 class WeightedSumTool(QgsProcessingAlgorithm):
     INPUT_RASTERS = 'INPUT_RASTERS'
     WEIGHTS = 'WEIGHTS'
-    OUTPUT = 'OUTPUT'
+    OUTPUT_WEIGHTED_SUM = 'OUTPUT_WEIGHTED_SUM'  # Changed from OUTPUT to OUTPUT_WEIGHTED_SUM
 
     def initAlgorithm(self, config=None):
         self.addParameter(
@@ -26,8 +26,8 @@ class WeightedSumTool(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterRasterDestination(
-                self.OUTPUT,
-                self.tr('Output raster')
+                self.OUTPUT_WEIGHTED_SUM,  # Changed from OUTPUT to OUTPUT_WEIGHTED_SUM
+                self.tr('Output Weighted Sum Raster')  # Changed description to be more descriptive
             )
         )
 
@@ -80,7 +80,7 @@ class WeightedSumTool(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         raster_layers = self.parameterAsLayerList(parameters, self.INPUT_RASTERS, context)
         weights_str = self.parameterAsString(parameters, self.WEIGHTS, context)
-        output = self.parameterAsOutputLayer(parameters, self.OUTPUT, context)
+        output = self.parameterAsOutputLayer(parameters, self.OUTPUT_WEIGHTED_SUM, context)  # Changed from OUTPUT to OUTPUT_WEIGHTED_SUM
 
         weights = [float(w.strip()) for w in weights_str.split(',') if w.strip()]
 
@@ -108,7 +108,7 @@ class WeightedSumTool(QgsProcessingAlgorithm):
         if result != 0:
             raise QgsProcessingException(self.tr(f'Error calculating output raster: {result}'))
 
-        return {self.OUTPUT: output}
+        return {self.OUTPUT_WEIGHTED_SUM: output}  # Changed from OUTPUT to OUTPUT_WEIGHTED_SUM
 
     def name(self):
         return 'weightedsum'
