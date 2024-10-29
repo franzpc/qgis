@@ -2,7 +2,7 @@
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
 description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more in QGIS. Includes tools for geometry calculations (area, perimeter, length), basemaps from Google Maps, Esri, Bing, and others.
-version=2.3beta
+version=2.4beta
 author=ArcGeek
 email=soporte@arcgeek.com
 about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:

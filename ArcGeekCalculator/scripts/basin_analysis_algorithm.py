@@ -97,13 +97,24 @@ class BasinAnalysisAlgorithm(QgsProcessingAlgorithm):
             temp_output_folder = QgsProcessingUtils.tempFolder()
             hypsometric_results = generate_hypsometric_curve(dem_clipped, basin_layer, temp_output_folder, feedback)
 
+            # Add Hypsometric Integral to the results table
+            if hypsometric_results and 'HI' in hypsometric_results and 'STAGE' in hypsometric_results:
+                hi_feature = QgsFeature()
+                hi_feature.setFields(fields)
+                hi_feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(pour_point)))
+                
+                hi_feature.setAttribute("Parameter", "Hypsometric Integral (HI)")
+                hi_feature.setAttribute("Value", round(hypsometric_results['HI'], precision))
+                hi_feature.setAttribute("Unit", "dimensionless")
+                hi_feature.setAttribute("Interpretation", hypsometric_results['STAGE'])
+                sink.addFeature(hi_feature, QgsFeatureSink.FastInsert)
+
             # Create clickable links to the output files
             for file_type, file_path in hypsometric_results.items():
                 if file_path:
                     feedback.pushInfo(f"{file_type}: {file_path}")
 
             feedback.pushInfo(f"Hypsometric curve analysis completed. Results saved in: {temp_output_folder}")
-
 
             return {self.OUTPUT: dest_id}
 
