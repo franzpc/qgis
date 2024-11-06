@@ -215,7 +215,7 @@ class CoordinateCalculatorAlgorithm(QgsProcessingAlgorithm):
                         break
                     
                     start = i
-                    end = min(i + batch_size, total_features)
+                    end = min(i + batch_size, total_features+1)
                     
                     attr_map = {}
                     feature_ids = list(range(start, end))  # Convert range to list
