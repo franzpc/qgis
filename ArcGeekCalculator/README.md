@@ -1,5 +1,5 @@
 # ArcGeek Calculator Plugin
-Version 2.4beta
+Version 2.5beta
 
 ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces new tools for kriging analysis, satellite index calculation, basemap management, screen capture, and CSV export.
 
@@ -51,7 +51,8 @@ ArcGeek
 
 ## Version History
 
-2.4beta: Added Hypsometric Integral (HI)
+2.5beta: Added Global Curve Number tool. Fixed the bug that did not calculate the coordinates for the last row (thanks to @russ-go), compensated slope suggested by Fernando Oñate.
+2.4beta: Added Hypsometric Integral (HI), and Calculate Angle tools.
 2.3beta: Added Kriging Analysis, Satellite Index Calculator, Basemap Manager, Screen Capture, and Export to CSV tools.
 2.1beta: Fix errors and improve performance.
 2.0beta: Added Dam Flood Simulation tool, correction of general errors.

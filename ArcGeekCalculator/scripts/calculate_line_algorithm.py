@@ -143,7 +143,7 @@ class CalculateLineAlgorithm(QgsProcessingAlgorithm):
         return 'calculatelinefromcoordinatesandtable'
 
     def displayName(self):
-        return 'Calculate Line from Coordinates and Table'
+        return 'Azimuth and distance from Coordinates and Table'
 
     def group(self):
         return 'ArcGeek Calculator'

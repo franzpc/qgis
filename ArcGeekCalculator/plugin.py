@@ -22,6 +22,8 @@ from .scripts.kriging_analysis import KrigingAnalysisAlgorithm
 from .scripts.satellite_index_calculator import SatelliteIndexCalculatorAlgorithm
 from .scripts.basemap_manager import BasemapManager
 from .scripts.screen_capture import ScreenCaptureDialog, run_screen_capture
+from .scripts.calculate_angles_algorithm import CalculateAnglesAlgorithm
+from .scripts.global_cn_calculator import GlobalCNCalculator
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -59,20 +61,24 @@ class ArcGeekCalculator:
             'export_to_csv': ExportToCSVAlgorithm(),
             'kriging_analysis': KrigingAnalysisAlgorithm(),
             'satellite_index': SatelliteIndexCalculatorAlgorithm(),
+            'angles': CalculateAnglesAlgorithm(),
+            'global_cn': GlobalCNCalculator(),
             'basemap_manager': BasemapManager(self.iface)
         }
 
         self.add_action("Calculate Point Coordinates", self.run_algorithm('coordinate'), os.path.join(self.plugin_dir, "icons/calculate_xy.png"))
         self.add_action("Calculate Line Geometry", self.run_algorithm('line'), os.path.join(self.plugin_dir, "icons/calculate_length.png"))
         self.add_action("Calculate Polygon Geometry", self.run_algorithm('polygon'), os.path.join(self.plugin_dir, "icons/calculate_area.png"))
+        self.add_action("Calculate Angles", self.run_algorithm('angles'), os.path.join(self.plugin_dir, "icons/calculate_angles.png"))
         self.add_action("Extract Ordered Points from Polygons", self.run_algorithm('polygon_to_points'), os.path.join(self.plugin_dir, "icons/order_point.png"))
         self.add_action("Lines to Ordered Points", self.run_algorithm('lines_to_ordered_points'), os.path.join(self.plugin_dir, "icons/lines_to_points.png"))
-        self.add_action("Calculate Line from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
+        self.add_action("Azimuth and Distance from Coordinates and Table", self.run_algorithm('calculate_line'), os.path.join(self.plugin_dir, "icons/calculate_line.png"))
         self.add_action("Export to CSV (Excel compatible)", self.run_algorithm('export_to_csv'), os.path.join(self.plugin_dir, "icons/export_csv.png"))
         self.add_separator()
         self.add_action("Stream Network with Order", self.run_algorithm('watershed_stream'), os.path.join(self.plugin_dir, "icons/watershed_network.png"))
         self.add_action("Watershed Basin Delineation", self.run_algorithm('watershed_basin'), os.path.join(self.plugin_dir, "icons/watershed_basin.png"))
         self.add_action("Watershed Morphometric Analysis", self.run_algorithm('basin_analysis'), os.path.join(self.plugin_dir, "icons/watershed_morfo.png"))
+        self.add_action("Global Curve Number", self.run_algorithm('global_cn'), os.path.join(self.plugin_dir, "icons/global_cn.png"))
         self.add_separator()
         self.add_action("Land Use Change Detection", self.run_algorithm('land_use_change'), os.path.join(self.plugin_dir, "icons/land_use_change.png"))
         self.add_action("Weighted Sum", self.run_algorithm('weighted_sum'), os.path.join(self.plugin_dir, "icons/weighted_sum.png"))

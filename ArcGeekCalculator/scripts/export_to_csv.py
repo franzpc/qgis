@@ -3,6 +3,8 @@ from qgis.core import (QgsProcessing, QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFileDestination,
                        QgsProcessingParameterEnum, QgsProcessingException)
+from .social_media import SocialMedia
+
 import csv
 import io
 
@@ -78,16 +80,18 @@ class ExportToCSVAlgorithm(QgsProcessingAlgorithm):
         return 'arcgeekcalculator'
 
     def shortHelpString(self):
-        return self.tr("""
+        help_text = self.tr("""
         This algorithm exports the attributes of a vector layer to CSV format.
         It offers two output options:
         1. Standard CSV: A regular comma-separated values file.
         2. Excel compatible CSV: A CSV file formatted to be easily opened in Excel.
         The tool will export all attributes of the input layer, including the feature ID.
         Geometry information is not included in the output.
-        
+    
         Note: This export uses UTF-8 encoding with BOM for better compatibility with Excel.
         """)
+        return help_text + SocialMedia.social_links
+
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)

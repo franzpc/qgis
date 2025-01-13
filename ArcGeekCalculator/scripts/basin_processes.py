@@ -54,6 +54,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         max_elevation = dem_stats.maximumValue
         min_elevation = dem_stats.minimumValue
         relief = max_elevation - min_elevation
+        mean_elevation = dem_stats.mean 
     except Exception as e:
         feedback.reportError(f"Error calculating DEM statistics: {str(e)}")
         max_elevation = min_elevation = relief = None
@@ -63,7 +64,8 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
     drainage_intensity = stream_frequency / drainage_density if drainage_density != 0 else None
     length_of_overland_flow = 1 / (2 * drainage_density) if drainage_density != 0 else None
 
-    mean_elevation = (max_elevation + min_elevation) / 2 if max_elevation is not None and min_elevation is not None else None
+    # mean_elevation = (max_elevation + min_elevation) / 2 if max_elevation is not None and min_elevation is not None else None
+    mean_elevation = dem_stats.mean
     mean_slope_radians = math.radians(mean_slope_degrees)
     mean_slope_m_per_m = math.tan(mean_slope_radians)
     mean_slope_percent = math.tan(math.radians(mean_slope_degrees)) * 100
@@ -121,6 +123,10 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         start_elevation = end_elevation = slope_s = slope_percent = None
     middle_distance = main_channel_length / (basin_area ** 0.5)
 
+
+    channel_compensated_slope_results = calculate_channel_compensated_slope(main_channel, dem_layer)
+
+
     # Time of concentration calculations
 
     # Kerby method needs to define a roughness coefficient 'n' (now 0.3)
@@ -175,7 +181,12 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         "End Elevation (Main Channel)": {"value": end_elevation, "unit": "m a.s.l.", "interpretation": "Elevation at the end of the main channel"},
         "Mean slope of the Basin (degrees)": {"value": mean_slope_degrees, "unit": "degrees", "interpretation": get_mean_slope_interpretation(mean_slope_degrees)},
         "Mean slope of the Basin (percent)": {"value": mean_slope_m_per_m * 100, "unit": "%", "interpretation": get_mean_slope_interpretation(mean_slope_m_per_m * 100, percent=True)},
-        "Main Channel Slope": {"value": slope_percent, "unit": "%", "interpretation": get_main_channel_slope_interpretation(slope_percent)},
+        "Main Channel Slope (Endpoints)": {"value": slope_percent, "unit": "%", "interpretation": get_main_channel_slope_interpretation(slope_percent)},
+
+
+        "Compensated Channel Slope": channel_compensated_slope_results.get("Compensated Channel Slope", {"value": None, "unit": "m/m", "interpretation": "Unable to calculate"}),
+        "Compensated Channel Slope (%)": channel_compensated_slope_results.get("Compensated Channel Slope (%)", {"value": None, "unit": "%", "interpretation": "Unable to calculate"}),
+
         "Drainage Density (Dd)": {"value": drainage_density, "unit": "km/km²", "interpretation": get_drainage_density_interpretation(drainage_density)},
         "Stream Frequency (Fs)": {"value": stream_frequency, "unit": "streams/km²", "interpretation": get_stream_frequency_interpretation(stream_frequency)},
         "Elongation Ratio (Re)": {"value": elongation_ratio, "unit": "", "interpretation": get_elongation_ratio_interpretation(elongation_ratio)},
@@ -224,6 +235,7 @@ def calculate_parameters(basin_source, streams_source, dem_layer, pour_point, st
         "Storage Coefficient": {"value": storage_coefficient, "unit": "km", "interpretation": get_storage_coefficient_interpretation(storage_coefficient)}
     }
 
+
 def calculate_basin_length(basin_source, pour_point):
     basin_geom = [f.geometry() for f in basin_source.getFeatures()][0]
     furthest_point = basin_geom.vertexAt(0)
@@ -251,6 +263,94 @@ def calculate_asymmetry_factor(basin_source, pour_point):
 
 def calculate_orographic_coefficient(relief, basin_area):
     return (relief * basin_area) / 1000  # Dividing by 1000 to get a more manageable number
+
+def linear_regression(x, y):
+    """
+    Calcular regresión lineal usando mínimos cuadrados de forma nativa
+    Retorna la pendiente (slope) de la línea de mejor ajuste
+    """
+    n = len(x)
+    
+    # Calcular sumas necesarias
+    sum_x = sum(x)
+    sum_y = sum(y)
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_x_squared = sum(xi * xi for xi in x)
+    
+    # Fórmula de mínimos cuadrados para la pendiente
+    numerator = n * sum_xy - sum_x * sum_y
+    denominator = n * sum_x_squared - sum_x * sum_x
+    
+    # Manejar caso de división por cero
+    if denominator == 0:
+        return 0
+    
+    slope = numerator / denominator
+    
+    return slope
+
+def calculate_channel_compensated_slope(main_channel_geom, dem_layer):
+    """
+    Calculate the compensated slope of the main channel using linear regression
+    
+    Parameters:
+    main_channel_geom (QgsGeometry): Main channel geometry
+    dem_layer (QgsRasterLayer): Digital Elevation Model layer
+    
+    Returns:
+    dict: Compensated channel slope information
+    """
+    # Obtain points of the main channel
+    vertices = main_channel_geom.asPolyline()
+    
+    # Initialize lists for distances and elevations
+    distances = [0]  # Start with 0 distance
+    elevations = []
+    
+    # Interpolate elevations for each point of the channel
+    for i, vertex in enumerate(vertices):
+        # Get elevation using neighbor interpolation from DEM
+        elevation = neighbor_average_interpolation(dem_layer, QgsPointXY(vertex))
+        
+        # Calculate cumulative distance
+        if i > 0:
+            # Calculate distance from previous point
+            distance = distances[-1] + QgsPointXY(vertex).distance(QgsPointXY(vertices[i-1]))
+            distances.append(distance)
+        
+        # Save elevation if valid
+        if elevation is not None:
+            elevations.append(elevation)
+    
+    # Truncate distances to match elevations length for safety
+    distances = distances[:len(elevations)]
+    
+    # Check if we have sufficient data for calculation
+    if len(distances) < 2 or len(elevations) < 2:
+        return {
+            "Compensated Channel Slope": {"value": None, "unit": "m/m", "interpretation": "Insufficient data to calculate slope"},
+            "Compensated Channel Slope (%)": {"value": None, "unit": "%", "interpretation": "Insufficient data to calculate slope"}
+        }
+    
+    # Calculate the slope using linear regression
+    # We use negative slope because elevation decreases as distance increases
+    compensated_slope = -linear_regression(distances, elevations)
+    
+    # Prepare return dictionary with multiple representations of the slope
+    return {
+        "Compensated Channel Slope": {
+            "value": compensated_slope, 
+            "unit": "m/m", 
+            "interpretation": "Calculated compensated channel slope using linear regression"
+        },
+        "Compensated Channel Slope (%)": {
+            "value": compensated_slope * 100, 
+            "unit": "%", 
+            "interpretation": get_compensated_channel_slope_interpretation(compensated_slope * 100)
+        }
+    }
+
+
 
 # Interpretations
 def get_basin_area_interpretation(area):
@@ -546,5 +646,19 @@ def get_main_channel_slope_interpretation(slope_percent):
         return "Steep slope"
     else:
         return "Very steep slope"
+
+def get_compensated_channel_slope_interpretation(slope_percent):
+    if slope_percent is None:
+        return "Unable to calculate compensated channel slope"
+    elif slope_percent < 1:
+        return "Very gentle compensated slope"
+    elif 1 <= slope_percent < 3:
+        return "Gentle compensated slope"
+    elif 3 <= slope_percent < 5:
+        return "Moderate compensated slope"
+    elif 5 <= slope_percent < 10:
+        return "Steep compensated slope"
+    else:
+        return "Very steep compensated slope"
 
 # Source: https://www.sciencedirect.com/science/article/pii/S258947142300030X

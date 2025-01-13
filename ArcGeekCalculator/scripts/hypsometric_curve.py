@@ -13,36 +13,23 @@ References:
   Mathematical Geology, 10(1), 59-72.
   DOI: 10.1007/BF01033236
 
-- Pike, R.J., Wilson, S.E. (1971). Elevation-relief ratio, hypsometric integral and 
-  geomorphic area-altitude analysis. Geological Society of America Bulletin, 82(4), 1079-1084.
-  DOI: 10.1130/0016-7606(1971)82[1079:ERHIAG]2.0.CO;2
-
-- Perez-Peña, J.V., Azor, A., Azañón, J.M., & Keller, E.A. (2010). 
-  Active tectonics in the Sierra Nevada (Betic Cordillera, SE Spain): Insights from geomorphic indexes and drainage pattern analysis.
-  Geomorphology, 119(1-2), 74-87.
-  DOI: 10.1016/j.geomorph.2010.02.020
-
-- Luo, W. (1998). Hypsometric analysis with a geographic information system.
-  Computers & Geosciences, 24(8), 815-821.
-  DOI: 10.1016/S0098-3004(98)00076-4
-
 Classification Criteria:
 ----------------------
 Hypsometric Integral (HI) ranges for basin developmental stages:
 - HI ≥ 0.60: Young stage (inequilibrium)
 - 0.35 ≤ HI < 0.60: Mature stage (equilibrium)
 - HI < 0.35: Old stage (monadnock)
-
-Modified and enhanced from original CalHypso code by J. Vicente Perez, Universidad de Granada
 """
 
 from qgis.core import *
 from qgis.analysis import QgsZonalStatistics
-from qgis.PyQt.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush
+from qgis.PyQt.QtGui import QColor, QPainter, QFont, QImage, QPen, QBrush, QPolygonF
 from qgis.PyQt.QtCore import QSize, Qt, QPointF, QRectF
 import processing
 import os
 import csv
+import platform
+import math
 
 # Try to import plotly
 try:
@@ -98,93 +85,97 @@ def generate_hypsometric_curve(dem_layer, basin_layer, output_folder, feedback):
     """
     Generate the hypsometric curve for the given DEM and basin layers.
     """
-    result = processing.run("qgis:hypsometriccurves", 
-                          {'INPUT_DEM': dem_layer,
-                           'BOUNDARY_LAYER': basin_layer,
-                           'STEP': 100,
-                           'USE_PERCENTAGE': False,
-                           'OUTPUT_DIRECTORY': output_folder})
-
-    csv_files = [f for f in os.listdir(output_folder) if f.startswith('histogram_') and f.endswith('.csv')]
-    if not csv_files:
-        feedback.reportError("No histogram CSV file found in the output directory.")
-        return
-
-    csv_files.sort(key=lambda x: os.path.getmtime(os.path.join(output_folder, x)), reverse=True)
-    csv_file = os.path.join(output_folder, csv_files[0])
-    feedback.pushInfo(f"Using most recent histogram file: {csv_file}")
-
     try:
-        with open(csv_file, 'r') as f:
-            reader = csv.reader(f)
-            next(reader)  # Skip header
-            data = list(reader)
+        result = processing.run("qgis:hypsometriccurves", 
+                              {'INPUT_DEM': dem_layer,
+                               'BOUNDARY_LAYER': basin_layer,
+                               'STEP': 100,
+                               'USE_PERCENTAGE': False,
+                               'OUTPUT_DIRECTORY': output_folder})
 
-        area = [float(row[0]) for row in data]
-        elevation = [float(row[1]) for row in data]
+        csv_files = [f for f in os.listdir(output_folder) if f.startswith('histogram_') and f.endswith('.csv')]
+        if not csv_files:
+            feedback.reportError("No histogram CSV file found in the output directory.")
+            return None
 
-        # Calculate total area in km²
-        total_area = max(area)
-        total_area_km2 = total_area / 1000000  # Convert from m² to km²
+        csv_files.sort(key=lambda x: os.path.getmtime(os.path.join(output_folder, x)), reverse=True)
+        csv_file = os.path.join(output_folder, csv_files[0])
+        feedback.pushInfo(f"Using most recent histogram file: {csv_file}")
 
-        # Calculate HI and get stage
-        hi = calculate_hypsometric_integral(elevation, area)
-        stage = get_basin_stage(hi)
-        
-        feedback.pushInfo(f"Calculated Hypsometric Integral: {hi:.3f} ({stage})")
+        try:
+            with open(csv_file, 'r') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                data = list(reader)
 
-        # Calculate relative height and area
-        min_elev, max_elev = min(elevation), max(elevation)
-        relative_height = [(e - min_elev) / (max_elev - min_elev) for e in elevation]
-        relative_area = [a / total_area for a in area]
+            area = [float(row[0]) for row in data]
+            elevation = [float(row[1]) for row in data]
 
-        # Invert the order of data for the hypsometric curve
-        relative_height = relative_height[::-1]
-        relative_area = [1 - a for a in relative_area[::-1]]
+            # Calculate total area in km²
+            total_area = max(area)
+            total_area_km2 = total_area / 1000000  # Convert from m² to km²
 
-        # Save processed data to CSV
-        processed_csv = os.path.join(output_folder, 'hypsometric_processed.csv')
-        with open(processed_csv, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(['Elevation (m)', 'Area (m²)', 'Relative Height (h/H)', 'Relative Area (a/A)'])
-            for i in range(len(elevation)):
-                writer.writerow([
-                    elevation[i],
-                    area[i],
-                    relative_height[len(elevation)-1-i],
-                    relative_area[len(elevation)-1-i]
-                ])
+            # Calculate HI and get stage
+            hi = calculate_hypsometric_integral(elevation, area)
+            stage = get_basin_stage(hi)
+            
+            feedback.pushInfo(f"Calculated Hypsometric Integral: {hi:.3f} ({stage})")
 
-        # Colors for the hypsometric curve
-        curve_color = QColor(19, 138, 249)  # Blue
-        point_color = QColor(203, 67, 53)   # Red
+            # Calculate relative height and area
+            min_elev, max_elev = min(elevation), max(elevation)
+            relative_height = [(e - min_elev) / (max_elev - min_elev) for e in elevation]
+            relative_area = [a / total_area for a in area]
 
-        # Create static image
-        create_static_image(relative_area, relative_height, curve_color, point_color, output_folder, hi, total_area_km2, stage)
+            # Invert the order of data for the hypsometric curve
+            relative_height = relative_height[::-1]
+            relative_area = [1 - a for a in relative_area[::-1]]
 
-        # Create interactive HTML if plotly is available
-        if PLOTLY_AVAILABLE:
-            create_interactive_html(relative_area, relative_height, area, elevation, curve_color, point_color, output_folder, hi, total_area_km2, stage)
-            feedback.pushInfo("Interactive hypsometric curve (HTML) generated.")
-        else:
-            feedback.pushInfo("Note: The interactive HTML version was not generated because plotly library is required.")
+            # Save processed data to CSV
+            processed_csv = os.path.join(output_folder, 'hypsometric_processed.csv')
+            with open(processed_csv, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Elevation (m)', 'Area (m²)', 'Relative Height (h/H)', 'Relative Area (a/A)'])
+                for i in range(len(elevation)):
+                    writer.writerow([
+                        elevation[i],
+                        area[i],
+                        relative_height[len(elevation)-1-i],
+                        relative_area[len(elevation)-1-i]
+                    ])
 
-        feedback.pushInfo(f"Processed data saved to: {processed_csv}")
-        feedback.pushInfo(f"Hypsometric curve analysis completed. Results saved in: {output_folder}")
-        
-        return {
-            'CSV': processed_csv,
-            'PNG': os.path.join(output_folder, 'hypsometric_curve.png'),
-            'HTML': os.path.join(output_folder, 'hypsometric_curve_interactive.html') if PLOTLY_AVAILABLE else None,
-            'HI': hi,
-            'TOTAL_AREA': total_area_km2,
-            'STAGE': stage
-        }
+            # Colors for the hypsometric curve
+            curve_color = QColor(19, 138, 249)  # Blue
+            point_color = QColor(203, 67, 53)   # Red
+
+            # Create static image
+            create_static_image(relative_area, relative_height, curve_color, point_color, output_folder, hi, total_area_km2, stage)
+
+            # Create interactive HTML if plotly is available
+            if PLOTLY_AVAILABLE:
+                create_interactive_html(relative_area, relative_height, area, elevation, curve_color, point_color, output_folder, hi, total_area_km2, stage)
+                feedback.pushInfo("Interactive hypsometric curve (HTML) generated.")
+            else:
+                feedback.pushInfo("Note: The interactive HTML version was not generated because plotly library is required.")
+
+            feedback.pushInfo(f"Processed data saved to: {processed_csv}")
+            feedback.pushInfo(f"Hypsometric curve analysis completed. Results saved in: {output_folder}")
+            
+            return {
+                'CSV': processed_csv,
+                'PNG': os.path.join(output_folder, 'hypsometric_curve.png'),
+                'HTML': os.path.join(output_folder, 'hypsometric_curve_interactive.html') if PLOTLY_AVAILABLE else None,
+                'HI': hi,
+                'TOTAL_AREA': total_area_km2,
+                'STAGE': stage
+            }
+
+        except Exception as e:
+            feedback.reportError(f"Error processing CSV file: {str(e)}")
+            return None
 
     except Exception as e:
-        feedback.reportError(f"Error processing CSV file: {str(e)}")
+        feedback.reportError(f"Error in generate_hypsometric_curve: {str(e)}")
         return None
-
 
 def create_static_image(relative_area, relative_height, curve_color, point_color, output_folder, hi, total_area_km2, stage):
     """
@@ -236,7 +227,15 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
             y = func(x)
             point = QPointF(margin_left + x * plot_width, height - margin_bottom - y * plot_height)
             points.append(point)
-        painter.drawPolyline(points)
+        
+        # Platform-specific drawing
+        if platform.system() == 'Darwin':  # macOS
+            polygon = QPolygonF()
+            for point in points:
+                polygon.append(point)
+            painter.drawPolyline(polygon)
+        else:  # Windows/Linux
+            painter.drawPolyline(points)
 
     # Draw reference curves
     draw_curve(lambda x: 1 - x**2, QColor('#FF6B6B'), Qt.DashLine)  # Young stage
@@ -250,7 +249,15 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
         x = margin_left + relative_area[i] * plot_width
         y = height - margin_bottom - relative_height[i] * plot_height
         points.append(QPointF(x, y))
-    painter.drawPolyline(points)
+
+    # Platform-specific drawing
+    if platform.system() == 'Darwin':  # macOS
+        polygon = QPolygonF()
+        for point in points:
+            polygon.append(point)
+        painter.drawPolyline(polygon)
+    else:  # Windows/Linux
+        painter.drawPolyline(points)
 
     # Draw points
     painter.setPen(QPen(Qt.black))
@@ -261,10 +268,8 @@ def create_static_image(relative_area, relative_height, curve_color, point_color
     # Add title with HI value, stage and total area
     painter.setPen(QPen(Qt.black))
     painter.setFont(QFont('Arial', 12, QFont.Bold))
-    # Aumentar el ancho del rectángulo de 400 a 600 y ajustar el X inicial
     painter.drawText(QRectF(width/2 - 300, 10, 600, 30), 
                     Qt.AlignCenter, f"Hypsometric Curve (HI = {hi:.3f} - {stage}, Area = {total_area_km2:.2f} km²)")
-
 
     # Add axis labels
     painter.setFont(QFont('Arial', 10))
@@ -320,6 +325,7 @@ def create_interactive_html(relative_area, relative_height, area, elevation, cur
         name='Old stage', 
         line=dict(color='#2ECC71', width=1, dash='dashdot')
     ), row=1, col=1)
+
 
     # Add hypsometric curve
     fig.add_trace(go.Scatter(
