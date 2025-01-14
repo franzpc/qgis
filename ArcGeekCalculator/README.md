@@ -65,18 +65,35 @@ ArcGeek
 ## Version History
 
 2.6beta: Added Global Curve Number calculation and Export Contours to 3D CAD tools.
+
 2.5beta: Fixed the bug that did not calculate the coordinates for the last row (Thanks to @russ-go), compensated slope suggested by Fernando Oñate.
+
 2.4beta: Added Hypsometric Integral (HI), and Calculate Angle tools.
+
 2.3beta: Added Kriging Analysis, Satellite Index Calculator, Basemap Manager, Screen Capture, and Export to CSV tools.
+
 2.1beta: Fix errors and improve performance.
+
 2.0beta: Added Dam Flood Simulation tool, correction of general errors.
-1.9beta: Improved Optimized Parcel Division tool with two-pass small polygon merging
-1.8beta: Added Land Use Change Detection, Weighted Sum Analysis, and Optimized Parcel Division tools
-1.7beta: Added new tools for watershed analysis and geometric calculations
-1.6beta: Enhanced "Extract Ordered Points from Polygons" with bi-directional numbering
-1.5beta: Added "Watershed Morphometric Analysis" tool
-1.4beta: Added "Extract Ordered Points from Polygons" functionalities
-1.3beta: Added "Calculate Line from Coordinates and Table", and "Go to XY" functionalities
-1.2beta: Added "Lines to Ordered Points" functionality
-1.1beta: Enhanced functionality and bug fixes
+
+1.9beta: Improved Optimized Parcel Division tool with two-pass small polygon merging.
+
+1.8beta: Added Land Use Change Detection, Weighted Sum Analysis, and Optimized Parcel Division tools.
+
+1.7beta: Added new tools for watershed analysis and geometric calculations.
+
+1.6beta: Enhanced "Extract Ordered Points from Polygons" with bi-directional numbering.
+
+1.5beta: Added "Watershed Morphometric Analysis" tool.
+
+1.4beta: Added "Extract Ordered Points from Polygons" functionalities.
+
+1.3beta: Added "Calculate Line from Coordinates and Table", and "Go to XY" functionalities.
+
+1.2beta: Added "Lines to Ordered Points" functionality.
+
+1.1beta: Enhanced functionality and bug fixes.
+
 1.0: Initial release with "Calculate Coordinates"
+
+## El blog de franz
