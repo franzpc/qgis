@@ -24,6 +24,7 @@ from .scripts.basemap_manager import BasemapManager
 from .scripts.screen_capture import ScreenCaptureDialog, run_screen_capture
 from .scripts.calculate_angles_algorithm import CalculateAnglesAlgorithm
 from .scripts.global_cn_calculator import GlobalCNCalculator
+from .scripts.contour_export_algorithm import ContourExportAlgorithm
 
 class ArcGeekCalculator:
     def __init__(self, iface: QgisInterface):
@@ -63,6 +64,7 @@ class ArcGeekCalculator:
             'satellite_index': SatelliteIndexCalculatorAlgorithm(),
             'angles': CalculateAnglesAlgorithm(),
             'global_cn': GlobalCNCalculator(),
+            'contour_export': ContourExportAlgorithm(),
             'basemap_manager': BasemapManager(self.iface)
         }
 
@@ -85,6 +87,7 @@ class ArcGeekCalculator:
         self.add_action("Dam Flood Simulation", self.run_algorithm('dam_flood_simulation'), os.path.join(self.plugin_dir, "icons/dam_flood.png"))
         self.add_action("Kriging Analysis", self.run_algorithm('kriging_analysis'), os.path.join(self.plugin_dir, "icons/kriging.png"))
         self.add_separator()
+        self.add_action("Export Contours to 3D CAD", self.run_algorithm('contour_export'), os.path.join(self.plugin_dir, "icons/contour_export3DCAD.png"))
         self.add_action("Optimized Parcel Division", self.run_algorithm('optimized_parcel_division'), os.path.join(self.plugin_dir, "icons/parcel_division.png"))
         self.add_separator()
         self.add_action("Manage Basemaps (Google, Bing, Esri)", self.run_basemap_manager, os.path.join(self.plugin_dir, "icons/basemap.png"))

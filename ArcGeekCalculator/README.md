@@ -1,32 +1,45 @@
 # ArcGeek Calculator Plugin
-Version 2.5beta
+Version 2.6beta
 
-ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces new tools for kriging analysis, satellite index calculation, basemap management, screen capture, and CSV export.
+ArcGeek Calculator is a comprehensive QGIS plugin that provides various hydrological, geomorphological, and spatial analysis tools. This version introduces new tools for Global Curve Number calculation, 3D CAD exports, along with existing tools for kriging analysis, satellite index calculation, basemap management, and more.
 
 ## Description
-ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
+ArcGeek Calculator is a QGIS plugin that provides a comprehensive set of tools for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and 3D CAD integration in QGIS. It's designed for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data.
 
 ## Key Features
 
+### Geometric Tools
 1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
 2. Calculate Line Geometry: Calculate length and azimuth for line features.
 3. Calculate Polygon Geometry: Calculate area and perimeter for polygon features.
 4. Go to XY: Quickly navigate to specific coordinates on the map and optionally create point markers.
+
+### Point and Line Processing
 5. Extract Ordered Points from Polygons: Extract and order points from the vertices of input polygons with bi-directional numbering.
 6. Lines to Ordered Points: Convert line features to ordered point features.
 7. Calculate Line from Coordinates and Table: Generate a line and points from starting coordinates and a table of distances and angles.
+
+### Hydrological Analysis
 8. Stream Network with Order: Generate a stream network with Strahler order.
 9. Watershed Basin Delineation: Delineate watershed basins from a DEM and pour points.
 10. Watershed Morphometric Analysis: Perform a comprehensive morphometric analysis of a watershed, calculating various parameters and providing their interpretations.
-11. Land Use Change Detection: Analyze changes in land use between two time periods.
-12. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
-13. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
-14. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
-15. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries: pykrige, scipy).
-16. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
-17. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
-18. Screen Capture: Capture and georeference the current map view.
-19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
+11. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
+
+### Land Analysis and Raster Processing
+12. Land Use Change Detection: Analyze changes in land use between two time periods.
+13. Weighted Sum Analysis: Perform weighted sum analysis on multiple raster layers.
+14. Optimized Parcel Division: Divide rectangular parcels into lots of specified width.
+15. Dam Flood Simulation: Simulate flooding based on a DEM and specified water level.
+
+### Advanced Analysis and Remote Sensing
+16. Kriging Analysis: Perform spatial interpolation using Kriging (requires external libraries).
+17. Satellite Index Calculator: Calculate various satellite indices (NDVI, NDWI, etc.) for different satellites.
+
+### Data Management and Export
+18. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
+19. Screen Capture: Capture and georeference the current map view.
+20. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
+21. Export Contours to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
 
 ## External Libraries
 Some tools in this plugin require external libraries:
@@ -51,7 +64,8 @@ ArcGeek
 
 ## Version History
 
-2.5beta: Added Global Curve Number tool. Fixed the bug that did not calculate the coordinates for the last row (thanks to @russ-go), compensated slope suggested by Fernando Oñate.
+2.6beta: Added Global Curve Number calculation and Export Contours to 3D CAD tools.
+2.5beta: Fixed the bug that did not calculate the coordinates for the last row (Thanks to @russ-go), compensated slope suggested by Fernando Oñate.
 2.4beta: Added Hypsometric Integral (HI), and Calculate Angle tools.
 2.3beta: Added Kriging Analysis, Satellite Index Calculator, Basemap Manager, Screen Capture, and Export to CSV tools.
 2.1beta: Fix errors and improve performance.

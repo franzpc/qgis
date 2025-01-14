@@ -15,7 +15,7 @@ from osgeo import gdal
 
 class GlobalCNCalculator(QgsProcessingAlgorithm):
     """
-    Calcula el Curve Number usando datos globales de ESA WorldCover y ORNL HYSOG.
+    Calculates the Curve Number using global datasets from ESA WorldCover and ORNL HYSOG.
     """
     
     INPUT_AREA = 'INPUT_AREA'
@@ -135,9 +135,9 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             multi_feedback.setCurrentStep(3)
             feedback.pushInfo(self.tr('Step 4/6: Calculating initial Curve Number...'))
             temp_cn_raster = self.calculate_cn(landcover, aligned_soil, QgsProcessing.TEMPORARY_OUTPUT, 
-                                           parameters.get(self.HC, 1),
-                                           parameters.get(self.ARC, 1),
-                                           context, feedback)
+                                               parameters.get(self.HC, 1),
+                                               parameters.get(self.ARC, 1),
+                                               context, feedback)
 
             # Clip CN raster with input polygon
             multi_feedback.setCurrentStep(4)
@@ -270,7 +270,7 @@ class GlobalCNCalculator(QgsProcessingAlgorithm):
             'BAND_B': 1,
             'FORMULA': formula,
             'NO_DATA': None,
-            'RTYPE': 0,
+            'RTYPE': 0,  # Byte data type
             'OPTIONS': '',
             'OUTPUT': output_path
         }, context=context, feedback=feedback)['OUTPUT']

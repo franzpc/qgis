@@ -2,10 +2,12 @@
 name=ArcGeek Calculator
 qgisMinimumVersion=3.34
 description=A comprehensive toolset for coordinate calculations, conversions, spatial operations, watershed analysis, land use analysis, flood simulation, and more in QGIS. Includes tools for geometry calculations (area, perimeter, length), basemaps from Google Maps, Esri, Bing, and others.
-version=2.5beta
+version=2.6beta
 author=ArcGeek
 email=soporte@arcgeek.com
 about=This plugin provides a suite of tools for GIS analysts, cartographers, surveyors, hydrologists, urban planners, and anyone working with spatial data:
+# Key Features
+
     1. Calculate Coordinates: Add XY coordinates to point layers, convert to Decimal Degrees, and provide two formats of Degrees Minutes Seconds.
     2. Calculate Line Geometry: Calculate length and azimuth for line features.
     3. Calculate Polygon Geometry: Calculate area and perimeter for polygon features.
@@ -25,14 +27,15 @@ about=This plugin provides a suite of tools for GIS analysts, cartographers, sur
     17. Basemap Manager: Add and manage basemaps from Google Maps, Esri, Bing, and others.
     18. Screen Capture: Capture and georeference the current map view.
     19. Export to CSV: Export vector layer attributes to CSV format compatible with Excel.
-    20. Calculate Global Curve Number.
+    20. Calculate Global Curve Number: Calculate CN values using global datasets for hydrological analysis.
+    21. Export c to 3D CAD: Export contour lines to DXF format preserving elevation values, making them compatible with AutoCAD, Civil 3D, BricsCAD, and other CAD software.
 
 tracker=https://github.com/franzpc/qgis/issues
 repository=https://github.com/franzpc/qgis/tree/main/ArcGeekCalculator
 homepage=https://arcgeek.com/
 donation=https://paypal.me/ArcGeek
 license=GPL-2.0-or-later
-tags=coordinates, calculator, cn, curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export
+tags=coordinates, calculator, cn, cad, contour lines, elevation,  curve number, analysis, conversion, dms, decimal degrees, line generation, xy navigation, watershed analysis, stream order, basin delineation, area calculation, perimeter calculation, xy coordinates, land use change, weighted sum, parcel division, line from coordinates, flood simulation, dam, kriging, satellite index, basemap, google maps, esri, bing, screen capture, csv export, hidrology
 category=Analysis
 icon=icon.png
 experimental=False
